@@ -1,0 +1,7 @@
+# ROS files
+build
+install
+log
+# Python files
+*.pyc
+__pycache__
