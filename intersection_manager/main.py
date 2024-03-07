@@ -141,7 +141,7 @@ def main():
 
     # Get traffic lights
     traffic_lights = world.get_actors().filter("traffic.traffic_light")
-    if traffic_lights is not None:
+    if traffic_lights:
         logging.info(f'[intersection manager] Get Carla traffic lights')
     
     # Set default Carla traffic lights' status
