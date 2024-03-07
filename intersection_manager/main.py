@@ -110,7 +110,7 @@ def get_state(selector):
     
     state = traffic_lights[int(index)].get_state()
 
-    logging.info(state)
+    # logging.info(state)
 
     return state
 
@@ -118,7 +118,7 @@ def queryable_callback(query):
 
     global traffic_lights
 
-    print(f">> [Queryable ] Received Query '{query.selector}'" + (f" with value: {query.value.payload}" if query.value is not None else ""))
+    # print(f">> [Queryable ] Received Query '{query.selector}'" + (f" with value: {query.value.payload}" if query.value is not None else ""))
 
     if query.value is None:
         # Get traffic light state
@@ -141,6 +141,8 @@ def main():
 
     # Get traffic lights
     traffic_lights = world.get_actors().filter("traffic.traffic_light")
+    if traffic_lights is not None:
+        logging.info(f'[intersection manager] Get Carla traffic lights')
     
     # Set default Carla traffic lights' status
     for i in range(1, 36):
