@@ -45,6 +45,14 @@ parser.add_argument('--config', '-c', dest='config',
                     metavar='FILE',
                     type=str,
                     help='A configuration file.')
+parser.add_argument('--host', dest='host',
+                    type=str,
+                    default='localhost',
+                    help='Carla client host connection.')
+parser.add_argument('--port', '-p', dest='port',
+                    type=int,
+                    default=2000,
+                    help='Carla client port number.')
 
 args = parser.parse_args()
 conf = zenoh.Config.from_file(args.config) if args.config is not None else zenoh.Config()
@@ -128,12 +136,12 @@ def queryable_callback(query):
         new_state = query.value.payload.decode('utf-8')
         set_state(query.selector, new_state)
 
-def main():
+def main(args):
     
     global traffic_lights
     
     # create a client in the Carla simulator
-    client = carla.Client('localhost', 2000)
+    client = carla.Client(args.host, args.port)
     client.set_timeout(10.0)
     # client.get_available_maps()
     world = client.get_world()
@@ -164,4 +172,4 @@ def main():
         time.sleep(1)
 
 if __name__ == "__main__":
-    main()
+    main(args)
