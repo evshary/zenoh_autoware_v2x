@@ -5,9 +5,6 @@ import zenoh
 from zenoh import Reliability, Sample
 import carla
 import logging
-# from lanelet2.core import BasicPoint3d, GPSPoint
-# from lanelet2.projection import UtmProjector
-# from lanelet2.io import Origin
 
 log_level = logging.INFO
 logging.basicConfig(format='%(levelname)s: %(message)s', level=log_level)

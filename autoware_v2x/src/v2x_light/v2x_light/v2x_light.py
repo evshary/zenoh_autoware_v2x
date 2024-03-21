@@ -207,10 +207,10 @@ class SignalPub(Node):
                     # Sync Autoware and Carla's traffic light signal
                     tl_color = (color_dict[color], Shape.CIRCLE.value, Status.ON.value, confidence)
                     traffic_signals = self.traffic_signals_gen(tl_id, tl_color)
+
+                    
                     self.publication.publish(traffic_signals)
-                    # self.pose_publisher.put(closest_lane[0])
                     self.publish_pose()
-                    # replies = session.get(selector, zenoh.Queue(), target=target, value='green')
                     break
             else:
                 pass
