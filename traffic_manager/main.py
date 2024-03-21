@@ -5,6 +5,9 @@ import zenoh
 from zenoh import Reliability, Sample
 import carla
 import logging
+# from lanelet2.core import BasicPoint3d, GPSPoint
+# from lanelet2.projection import UtmProjector
+# from lanelet2.io import Origin
 
 log_level = logging.INFO
 logging.basicConfig(format='%(levelname)s: %(message)s', level=log_level)
@@ -57,6 +60,57 @@ key = args.key
 
 traffic_lights = None
 
+lane_to_light = {
+    1549: 33, 1136: 34, 1556: 35, # A
+    1143: 18, 1605: 19, 1150: 20, # B
+    1157: 16, 1419: 17, 1426: 13, # C
+    1563: 30, 1064: 31, 1570: 32, # D
+    1440: 10, 1071: 11, 1433: 12, # E
+    1577: 27, 1234: 28, 1584: 29, # F
+    1454:  7, 1241:  8, 1447:  9  # G
+}
+
+
+A = [33, 34, 35]
+B = [18, 19, 20]
+C = [13, 16, 17]
+D = [30, 31, 32]
+E = [10, 11, 12]
+F = [27, 28, 29]
+G = [ 7,  8,  9]
+
+
+def traffic_management(vehicle_id, lane_id, x, y, z):
+    if lane_id != 0:
+        light = lane_to_light[lane_id]
+
+        iter = enumerate(zip(A, B, C, D, E, F, G))
+        intersection = [A, B, C, D, E, F, G]
+
+        idx = 0
+
+        for i, (a,b,c,d,e,f,g) in iter:
+            try:
+                idx = [a,b,c,d,e,f,g].index(light)
+                intersection_id = chr(idx + 65)
+            except:
+                pass
+
+        tl_location = traffic_lights[light].get_location()
+
+        # The y-axis has a negative sign difference between Autoware topic and Carla sim.
+        vehicle_location = carla.Location(x, y * -1, z)
+
+        distance = vehicle_location.distance(tl_location)
+
+        logging.info(f'The vehicle {vehicle_id} is approaching intersection {intersection_id} and will arrive in {distance:.2f} meters.')
+
+        if distance < 15.0:
+            for i in intersection[idx]:
+                if i != light:
+                    traffic_lights[i].set_state(carla.TrafficLightState.Red)
+            traffic_lights[light].set_state(carla.TrafficLightState.Green)
+
 def main(args):
 
     global traffic_lights
@@ -67,7 +121,7 @@ def main(args):
     client.set_timeout(10.0)
     # client.get_available_maps()
     world = client.get_world()
-    
+
 
     # Get traffic lights
     traffic_lights = world.get_actors().filter("traffic.traffic_light")
@@ -86,46 +140,17 @@ def main(args):
 
 
     def listener(sample: Sample):
-        lane_to_light = {
-            1549: 33, 1136: 34, 1556: 35, # A
-            1143: 18, 1605: 19, 1150: 20, # B
-            1157: 16, 1419: 17, 1426: 13, # C
-            1563: 30, 1064: 31, 1570: 32, # D
-            1440: 10, 1071: 11, 1433: 12, # E
-            1577: 27, 1234: 28, 1584: 29, # F
-            1454:  7, 1241:  8, 1447:  9  # G
-        }
+        payload = json.loads(sample.payload.decode('utf-8'))
 
-        A = [33, 34, 35]
-        B = [18, 19, 20]
-        C = [13, 16, 17]
-        D = [30, 31, 32]
-        E = [10, 11, 12]
-        F = [27, 28, 29]
-        G = [ 7,  8,  9]
+        lane_id = int(payload['lane_id'])
+        position = payload['position']
+        pos_x = float(position['x'])
+        pos_y = float(position['y'])
+        pos_z = float(position['z'])
 
-        lane_id = int(sample.payload.decode('utf-8'))
         vehicle_id = str(sample.key_expr).split('/')[1]
 
-        light = lane_to_light[lane_id]
-
-        iter = enumerate(zip(A, B, C, D, E, F, G))
-        intersection = [A, B, C, D, E, F, G]
-
-        idx = 0
-
-        for i, (a,b,c,d,e,f,g) in iter:
-            try:
-                idx = [a,b,c,d,e,f,g].index(light)
-            except:
-                pass
-
-        for i in intersection[idx]:
-            if i != light:
-                traffic_lights[i].set_state(carla.TrafficLightState.Red)
-        traffic_lights[light].set_state(carla.TrafficLightState.Green)
-
-        logging.info(f">> [Subscriber] Received {sample.kind} ('{sample.key_expr}': '{sample.payload.decode('utf-8')}')")
+        traffic_management(vehicle_id, lane_id, pos_x, pos_y, pos_z)
 
     sub = session.declare_subscriber(key, listener, reliability=Reliability.RELIABLE())
 

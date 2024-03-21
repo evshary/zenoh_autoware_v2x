@@ -6,6 +6,7 @@ from argparse import ArgumentParser
 from rclpy.qos import QoSProfile
 from autoware_auto_perception_msgs.msg import TrafficSignalArray, TrafficSignal, TrafficLight
 from autoware_auto_planning_msgs.msg import PathWithLaneId
+from autoware_adapi_v1_msgs.msg import VehicleKinematics
 from builtin_interfaces.msg import Time
 from enum import Enum
 import time
@@ -66,6 +67,14 @@ parser.add_argument("--vehicle", '-v', type=str, default='v1', help="Vehicle ID"
 
 args = parser.parse_args()
 
+class Pose():
+    def __init__(self, lane_id, pos_x, pos_y, pos_z):
+        self.lane_id  = lane_id
+        self.pos_x = pos_x
+        self.pos_y = pos_y
+        self.pos_z = pos_z
+        
+
 class Shape(Enum):
     CIRCLE = 5
     LEFT_ARROW = 6
@@ -106,6 +115,13 @@ light_id = [
 ]
 
 
+# Init. global variables about Pose
+pos_lane_id = 0
+pos_x = 0.0
+pos_y = 0.0
+pos_z = 0.0
+
+
 session = zenoh.open()
 
 class SignalPub(Node):
@@ -125,7 +141,15 @@ class SignalPub(Node):
             'planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id',
             self.signal_callback,
             qos_profile=qos_profile)
+        self.pose_subscription = self.create_subscription(
+            VehicleKinematics,
+            'api/vehicle/kinematics',
+            self.pose_callback,
+            10
+        )
         self.subscription
+        self.pose_subscription
+
         self.pose_publisher = session.declare_publisher(f'vehicle/{args.vehicle}/pose')
         self.red_signal = self.publish_red_signal()
 
@@ -139,10 +163,34 @@ class SignalPub(Node):
             self.publication.publish(traffic_signals)
             selector, target, color = self.query_light_status(id)
             replies = session.get(selector, zenoh.Queue(), target=target, value='red')
+    
+    def publish_pose(self):
+        global pos_x, pos_y, pos_z, pos_lane_id
+
+        pose = {
+            'lane_id':pos_lane_id,
+            'position': {
+                'x': pos_x,
+                'y': pos_y,
+                'z': pos_z
+            }
+        }
+
+        self.pose_publisher.put(pose)
+
+    def pose_callback(self, data):
+        global pos_x, pos_y, pos_z
+
+        position = data.pose.pose.pose.position
+        pos_x = position.x
+        pos_y = position.y
+        pos_z = position.z
+        
+        self.publish_pose()
 
     def signal_callback(self, data):
-        
         global color_dict, light_id, lane_id
+        global pos_lane_id
 
         closest_lane = []
 
@@ -150,7 +198,8 @@ class SignalPub(Node):
             if any(id in d.lane_ids for id in lane_id):
                 if not closest_lane and len(d.lane_ids) == 1:
                     closest_lane.append(d.lane_ids[0])
-                    print(closest_lane[0])
+                    # print(closest_lane[0])
+                    pos_lane_id = closest_lane[0]
                     idx = lane_id.index(d.lane_ids[0])
                     tl_id = light_id[idx]
                     selector, target, color = self.query_light_status(tl_id)
@@ -159,7 +208,8 @@ class SignalPub(Node):
                     tl_color = (color_dict[color], Shape.CIRCLE.value, Status.ON.value, confidence)
                     traffic_signals = self.traffic_signals_gen(tl_id, tl_color)
                     self.publication.publish(traffic_signals)
-                    self.pose_publisher.put(closest_lane[0])
+                    # self.pose_publisher.put(closest_lane[0])
+                    self.publish_pose()
                     # replies = session.get(selector, zenoh.Queue(), target=target, value='green')
                     break
             else:
@@ -222,12 +272,12 @@ class SignalPub(Node):
             for reply in replies.receiver:
                 try:
                     payload = reply.ok.payload.decode("utf-8")
-                    print(">> Received ('{}': '{}')"
-                        .format(reply.ok.key_expr, reply.ok.payload.decode("utf-8")))
+                    # print(">> Received ('{}': '{}')"
+                    #     .format(reply.ok.key_expr, reply.ok.payload.decode("utf-8")))
                 except:
                     payload = reply.err.payload.decode("utf-8")
-                    print(">> Received (ERROR: '{}')"
-                        .format(reply.err.payload.decode("utf-8")))
+                    # print(">> Received (ERROR: '{}')"
+                    #     .format(reply.err.payload.decode("utf-8")))
         
         return selector, target, payload
 
