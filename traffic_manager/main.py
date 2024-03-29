@@ -89,14 +89,6 @@ current_G = []
 intersection_status = [current_A, current_B, current_C, 
                     current_D, current_E, current_F, current_G]
 
-class TrafficLightQuery:
-  def __init__(self, vehicle_id, light, intersection_id):
-    self.vehicle_id = vehicle_id
-    self.light = light
-    self.intersection_id = intersection_id
-
-
-
 
 def consensus(vehicle_id, intersection_id, light, distance):
     global intersection_status, traffic_lights
