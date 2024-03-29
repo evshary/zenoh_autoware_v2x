@@ -134,7 +134,7 @@ def queryable_callback(query):
         query.reply(Sample(str(query.selector), state))
     else:
         new_state = query.value.payload.decode('utf-8')
-        set_state(query.selector, new_state)
+        # set_state(query.selector, new_state)
 
 def main(args):
     
