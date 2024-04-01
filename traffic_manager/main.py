@@ -77,6 +77,72 @@ F = [27, 28, 29]
 G = [ 7,  8,  9]
 
 
+# Current intersection status
+current_A = []
+current_B = []
+current_C = []
+current_D = []
+current_E = []
+current_F = []
+current_G = []
+
+# The number of vehicles in the intersection A, B, C, D, ...
+intersection_status = [current_A, current_B, current_C, 
+                    current_D, current_E, current_F, current_G]
+
+
+def consensus(vehicle_id, intersection_id, light, distance):
+    global intersection_status, traffic_lights
+
+    iter = enumerate(zip(A, B, C, D, E, F, G))
+    intersection = [A, B, C, D, E, F, G]
+
+    # intersection index
+    idx = 0
+
+    for i, (a,b,c,d,e,f,g) in iter:
+        try:
+            idx = [a,b,c,d,e,f,g].index(light)
+        except:
+            pass
+
+    flag = 0
+
+    # logging.info(f'{vehicle_id}, {light}, {distance}')
+
+    # Check the traffic light query exist or not
+    # query = [vehicle_id, light_id, distance]
+    for current_x in intersection_status:
+        for index, query in enumerate(current_x):
+            if vehicle_id in query[0]:
+                flag = 1
+                # New query arrived
+                if light != query[1]:
+                    current_x.remove([query[0], query[1], query[2]])
+                    flag = 0
+                else:
+                    query[2] = distance # Update distance
+
+    # Append new traffic light query
+    if flag == 0:
+        intersection_status[idx].append([vehicle_id, light, distance])
+    
+    # Sorting every queries by vehicle_id
+    for current_x in intersection_status:
+        current_x.sort()
+        logging.info(current_x)
+        try:
+            for query in current_x:
+                # Apply one query that distance below 20
+                if query[2] < 20:
+                    for i in intersection[idx]:
+                        if i != query[1]:
+                            traffic_lights[i].set_state(carla.TrafficLightState.Red)
+                    traffic_lights[query[1]].set_state(carla.TrafficLightState.Green)
+                    break
+        except:
+            pass
+
 def traffic_management(vehicle_id, lane_id, x, y, z):
     if lane_id != 0:
         light = lane_to_light[lane_id]
@@ -99,14 +165,10 @@ def traffic_management(vehicle_id, lane_id, x, y, z):
         vehicle_location = carla.Location(x, y * -1, z)
 
         distance = vehicle_location.distance(tl_location)
+        
+        # logging.info(f'The vehicle {vehicle_id} is approaching intersection {intersection_id} and will arrive in {distance:.2f} meters.')
 
-        logging.info(f'The vehicle {vehicle_id} is approaching intersection {intersection_id} and will arrive in {distance:.2f} meters.')
-
-        if distance < 15.0:
-            for i in intersection[idx]:
-                if i != light:
-                    traffic_lights[i].set_state(carla.TrafficLightState.Red)
-            traffic_lights[light].set_state(carla.TrafficLightState.Green)
+        consensus(vehicle_id, intersection_id, light, distance)
 
 def main(args):
 
