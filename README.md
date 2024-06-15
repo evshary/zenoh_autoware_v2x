@@ -8,13 +8,14 @@
 > [!IMPORTANT]
 > Make sure you have already cloned this repo into autoware_carla_launch/external.
 
+- in bridge container
 ```bash=
-(in bridge container...)
 $ cd zenoh_autoware_v2x && poetry install --no-root
-
-(in Autoware container...)
+```
+- in Autoware container
+```bash=
 $ cd zenoh_autoware_v2x && colcon build --symlink-install
-$ pip install eclipse-zenoh==0.10.0rc0
+$ pip install eclipse-zenoh==0.11.0-rc3
 ```
 
 ## Run
