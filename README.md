@@ -41,7 +41,7 @@ source env.sh
 pip install -r external/zenoh_autoware_v2x/requirements.txt
 ./script/run-autoware.sh
 
-(Open another window in autoware container for executing the below commands)
+# Open another window in the Autoware container to execute the commands below.
 source external/zenoh_autoware_v2x/install/setup.bash
 ros2 run v2x_light v2x_light -- -v <vehicle_ID>
 ```
