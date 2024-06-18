@@ -9,9 +9,9 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.8"
 pygame = "^2.1.2"
-carla = "0.9.13"
+carla = "0.9.14"
 numpy = "^1.24.1"
-eclipse-zenoh = "0.10.0-rc"
+eclipse-zenoh = "0.11.0-rc3"
 
 
 [build-system]
