@@ -2,20 +2,22 @@
 
 ![](resource/Autoware_V2X_Zenoh_Architecture.svg)
 
-
 ## Setup
 
 > [!IMPORTANT]
 > Please clone this repository under `autoware_carla_launch/external/` first.
 
 - in bridge container
+
 ```shell
 cd autoware_carla_launch
 source env.sh
 cd external/zenoh_autoware_v2x
 poetry env use $(pyenv which python) && poetry install --no-root
 ```
+
 - in Autoware container
+
 ```shell
 cd autoware_carla_launch/external/zenoh_autoware_v2x
 pip install -r requirements.txt
@@ -45,4 +47,5 @@ pip install -r external/zenoh_autoware_v2x/requirements.txt
 source external/zenoh_autoware_v2x/install/setup.bash
 ros2 run v2x_light v2x_light -- -v <vehicle_ID>
 ```
+
 **Note:** <vehicle_id> must same as CARLA agent's rolename. (default is "v1")
