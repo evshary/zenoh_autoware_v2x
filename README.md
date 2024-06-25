@@ -20,7 +20,6 @@ poetry env use $(pyenv which python) && poetry install --no-root
 
 ```shell
 cd autoware_carla_launch/external/zenoh_autoware_v2x
-pip install -r requirements.txt
 colcon build --symlink-install
 ```
 
@@ -43,8 +42,6 @@ source env.sh
 ```shell
 cd autoware_carla_launch
 source env.sh
-# For the reinstallation of the eclipse-zenoh package each time the Autoware container is executed.
-pip install -r external/zenoh_autoware_v2x/requirements.txt
 ./script/run-autoware.sh
 
 # Open another window in the Autoware container to execute the commands below.
