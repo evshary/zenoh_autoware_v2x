@@ -5,7 +5,6 @@ description = ""
 authors = ["RogerJung <engineer54rj@gmail.com>"]
 readme = "README.md"
 
-
 [tool.poetry.dependencies]
 python = "^3.8"
 pygame = "^2.1.2"
@@ -13,7 +12,16 @@ carla = "0.9.14"
 numpy = "^1.24.1"
 eclipse-zenoh = "0.11.0-rc3"
 
-
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+# Ruff
+[tool.ruff]
+line-length = 150
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.format]
+quote-style = "single"

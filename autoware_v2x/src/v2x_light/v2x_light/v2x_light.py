@@ -1,17 +1,16 @@
 #!/usr/bin/env python
-import rclpy
-from rclpy.node import Node
-import sys
 from argparse import ArgumentParser
-from rclpy.qos import QoSProfile
-from autoware_auto_perception_msgs.msg import TrafficSignalArray, TrafficSignal, TrafficLight
-from autoware_auto_planning_msgs.msg import PathWithLaneId
-from autoware_adapi_v1_msgs.msg import VehicleKinematics
-from builtin_interfaces.msg import Time
 from enum import Enum
-import time
+
+import rclpy
 import zenoh
-from zenoh import config, QueryTarget
+from autoware_adapi_v1_msgs.msg import VehicleKinematics
+from autoware_auto_perception_msgs.msg import TrafficLight, TrafficSignal, TrafficSignalArray
+from autoware_auto_planning_msgs.msg import PathWithLaneId
+from builtin_interfaces.msg import Time
+from rclpy.node import Node
+from rclpy.qos import QoSProfile
+from zenoh import QueryTarget
 
 """
 ref link : https://github.com/tier4/autoware_auto_msgs/blob/tier4/main/autoware_auto_perception_msgs/msg/TrafficLight.idl
@@ -63,17 +62,18 @@ module autoware_auto_perception_msgs {
 """
 
 parser = ArgumentParser()
-parser.add_argument("--vehicle", '-v', type=str, default='v1', help="Vehicle ID")
+parser.add_argument('--vehicle', '-v', type=str, default='v1', help='Vehicle ID')
 
 args = parser.parse_args()
 
-class Pose():
+
+class Pose:
     def __init__(self, lane_id, pos_x, pos_y, pos_z):
-        self.lane_id  = lane_id
+        self.lane_id = lane_id
         self.pos_x = pos_x
         self.pos_y = pos_y
         self.pos_z = pos_z
-        
+
 
 class Shape(Enum):
     CIRCLE = 5
@@ -81,37 +81,62 @@ class Shape(Enum):
     RIGHT_ARROW = 7
     UP_ARROW = 8
 
+
 class Status(Enum):
     OFF = 15
     ON = 16
-    
+
+
 confidence = 1.0
 
-color_dict = {
-    'Red': 1,
-    'Yellow': 2,
-    'Green': 3,
-    'White': 4
-}
+color_dict = {'Red': 1, 'Yellow': 2, 'Green': 3, 'White': 4}
 
 lane_id = [
-    1549, 1136, 1556, 
-    1605, 1150, 1143, 
-    1419, 1426, 1157,
-    1563, 1064, 1570,
-    1433, 1440, 1071,
-    1577, 1234, 1584,
-    1447, 1454, 1241
+    1549,
+    1136,
+    1556,
+    1605,
+    1150,
+    1143,
+    1419,
+    1426,
+    1157,
+    1563,
+    1064,
+    1570,
+    1433,
+    1440,
+    1071,
+    1577,
+    1234,
+    1584,
+    1447,
+    1454,
+    1241,
 ]
 
 light_id = [
-    3699, 3721, 3710, 
-    3754, 3743, 3732,
-    3787, 3798, 3765,
-    3552, 3611, 3600,
-    3688, 3677, 3666,
-    3574, 3633, 3622,
-    3655, 3644, 3589
+    3699,
+    3721,
+    3710,
+    3754,
+    3743,
+    3732,
+    3787,
+    3798,
+    3765,
+    3552,
+    3611,
+    3600,
+    3688,
+    3677,
+    3666,
+    3574,
+    3633,
+    3622,
+    3655,
+    3644,
+    3589,
 ]
 
 
@@ -124,29 +149,23 @@ pos_z = 0.0
 
 session = zenoh.open()
 
+
 class SignalPub(Node):
     def __init__(self, nodeName):
         super().__init__(nodeName)
         qos_profile = QoSProfile(
-            reliability=2, # RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT
-            history=1, # RMW_QOS_POLICY_HISTORY_KEEP_LAST
-            depth=1
+            reliability=2,  # RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT
+            history=1,  # RMW_QOS_POLICY_HISTORY_KEEP_LAST
+            depth=1,
         )
-        self.publication = self.create_publisher(
-            TrafficSignalArray,
-            'perception/traffic_light_recognition/traffic_signals',
-            1)
+        self.publication = self.create_publisher(TrafficSignalArray, 'perception/traffic_light_recognition/traffic_signals', 1)
         self.subscription = self.create_subscription(
             PathWithLaneId,
             'planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id',
             self.signal_callback,
-            qos_profile=qos_profile)
-        self.pose_subscription = self.create_subscription(
-            VehicleKinematics,
-            'api/vehicle/kinematics',
-            self.pose_callback,
-            10
+            qos_profile=qos_profile,
         )
+        self.pose_subscription = self.create_subscription(VehicleKinematics, 'api/vehicle/kinematics', self.pose_callback, 10)
         self.subscription
         self.pose_subscription
 
@@ -162,19 +181,12 @@ class SignalPub(Node):
             traffic_signals = self.traffic_signals_gen(id, color)
             self.publication.publish(traffic_signals)
             selector, target, color = self.query_light_status(id)
-            replies = session.get(selector, zenoh.Queue(), target=target, value='red')
-    
+            _replies = session.get(selector, zenoh.Queue(), target=target, value='red')
+
     def publish_pose(self):
         global pos_x, pos_y, pos_z, pos_lane_id
 
-        pose = {
-            'lane_id':pos_lane_id,
-            'position': {
-                'x': pos_x,
-                'y': pos_y,
-                'z': pos_z
-            }
-        }
+        pose = {'lane_id': pos_lane_id, 'position': {'x': pos_x, 'y': pos_y, 'z': pos_z}}
 
         self.pose_publisher.put(pose)
 
@@ -185,7 +197,7 @@ class SignalPub(Node):
         pos_x = position.x
         pos_y = position.y
         pos_z = position.z
-        
+
         self.publish_pose()
 
     def signal_callback(self, data):
@@ -208,19 +220,18 @@ class SignalPub(Node):
                     tl_color = (color_dict[color], Shape.CIRCLE.value, Status.ON.value, confidence)
                     traffic_signals = self.traffic_signals_gen(tl_id, tl_color)
 
-                    
                     self.publication.publish(traffic_signals)
                     self.publish_pose()
                     break
             else:
                 pass
 
-    def stamp_gen(self, frame_id = ''):
+    def stamp_gen(self, frame_id=''):
         stamp = Time()
         t = self.get_clock().now()
         stamp = t.to_msg()
         return stamp
-    
+
     def traffic_signal_element_gen(self, state):
         tse = TrafficLight()
         tse.color = state[0]
@@ -229,13 +240,13 @@ class SignalPub(Node):
         tse.confidence = state[3]
         # print(tse)
         return tse
-    
+
     def traffic_signal_gen(self, tl_id, state):
         ts = TrafficSignal()
         ts.map_primitive_id = tl_id
         ts.lights.append(self.traffic_signal_element_gen(state))
         return ts
-    
+
     def traffic_signals_gen(self, tl_id, state):
         stamp = self.stamp_gen()
         ts = self.traffic_signal_gen(tl_id, state)
@@ -245,20 +256,34 @@ class SignalPub(Node):
         # traffic_signals.frame_id = ''
         traffic_signals.signals.append(ts)
         return traffic_signals
-    
+
     def query_light_status(self, tl_id):
         # Match intersection ID and traffic light ID
         intersection_id = {
-            3699: 'A', 3721: 'A', 3710: 'A', # A
-            3732: 'B', 3754: 'B', 3743: 'B', # B
-            3765: 'C', 3787: 'C', 3798: 'C', # C
-            3552: 'D', 3611: 'D', 3600: 'D', # D
-            3677: 'E', 3666: 'E', 3688: 'E', # E
-            3574: 'F', 3633: 'F', 3622: 'F', # F
-            3644: 'G', 3589: 'G', 3655: 'G'  # G
+            3699: 'A',
+            3721: 'A',
+            3710: 'A',  # A
+            3732: 'B',
+            3754: 'B',
+            3743: 'B',  # B
+            3765: 'C',
+            3787: 'C',
+            3798: 'C',  # C
+            3552: 'D',
+            3611: 'D',
+            3600: 'D',  # D
+            3677: 'E',
+            3666: 'E',
+            3688: 'E',  # E
+            3574: 'F',
+            3633: 'F',
+            3622: 'F',  # F
+            3644: 'G',
+            3589: 'G',
+            3655: 'G',  # G
         }
 
-        selector = f'intersection/{intersection_id[tl_id]}/traffic_light/' + str(tl_id) + "/state"
+        selector = f'intersection/{intersection_id[tl_id]}/traffic_light/' + str(tl_id) + '/state'
 
         target = {
             'ALL': QueryTarget.ALL(),
@@ -271,15 +296,16 @@ class SignalPub(Node):
         if replies:
             for reply in replies.receiver:
                 try:
-                    payload = reply.ok.payload.decode("utf-8")
+                    payload = reply.ok.payload.decode('utf-8')
                     # print(">> Received ('{}': '{}')"
                     #     .format(reply.ok.key_expr, reply.ok.payload.decode("utf-8")))
-                except:
-                    payload = reply.err.payload.decode("utf-8")
+                except Exception as _e:
+                    payload = reply.err.payload.decode('utf-8')
                     # print(">> Received (ERROR: '{}')"
                     #     .format(reply.err.payload.decode("utf-8")))
-        
+
         return selector, target, payload
+
 
 def main(args=args):
     rclpy.init()
@@ -287,6 +313,7 @@ def main(args=args):
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
