@@ -12,60 +12,34 @@
 #   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
 #
 
-import sys
-import time
 import argparse
 import json
+
 import zenoh
-from zenoh import config, QueryTarget
+from zenoh import QueryTarget
 
 # --- Command line argument parsing --- --- --- --- --- ---
-parser = argparse.ArgumentParser(
-    prog='controller.py',
-    description='Carla traffic light controller.')
-parser.add_argument('--mode', '-m', dest='mode',
-                    choices=['peer', 'client'],
-                    type=str,
-                    help='The zenoh session mode.')
-parser.add_argument('--connect', '-e', dest='connect',
-                    metavar='ENDPOINT',
-                    action='append',
-                    type=str,
-                    help='Endpoints to connect to.')
-parser.add_argument('--listen', '-l', dest='listen',
-                    metavar='ENDPOINT',
-                    action='append',
-                    type=str,
-                    help='Endpoints to listen on.')
-parser.add_argument('--target', '-t', dest='target',
-                    choices=['ALL', 'BEST_MATCHING', 'ALL_COMPLETE', 'NONE'],
-                    default='BEST_MATCHING',
-                    type=str,
-                    help='The target queryables of the query.')
-parser.add_argument('--value', '-v', dest='value',
-                    type=str,
-                    help='An optional value to send in the query.')
-parser.add_argument('--config', '-c', dest='config',
-                    metavar='FILE',
-                    type=str,
-                    help='A configuration file.')
-parser.add_argument('--command', '--cmd', dest='command',
-                    choices=['get', 'set'],
-                    required=True,
-                    type=str,
-                    help='The query command.')
-parser.add_argument('--light_id', '-i', dest='light_id',
-                    required=True,
-                    type=int,
-                    help='The traffic light\'s id')
-parser.add_argument('--state', '-s', dest='state',
-                    choices=['green', 'red'],
-                    type=str,
-                    help='The light\'s state')
+parser = argparse.ArgumentParser(prog='controller.py', description='Carla traffic light controller.')
+parser.add_argument('--mode', '-m', dest='mode', choices=['peer', 'client'], type=str, help='The zenoh session mode.')
+parser.add_argument('--connect', '-e', dest='connect', metavar='ENDPOINT', action='append', type=str, help='Endpoints to connect to.')
+parser.add_argument('--listen', '-l', dest='listen', metavar='ENDPOINT', action='append', type=str, help='Endpoints to listen on.')
+parser.add_argument(
+    '--target',
+    '-t',
+    dest='target',
+    choices=['ALL', 'BEST_MATCHING', 'ALL_COMPLETE', 'NONE'],
+    default='BEST_MATCHING',
+    type=str,
+    help='The target queryables of the query.',
+)
+parser.add_argument('--value', '-v', dest='value', type=str, help='An optional value to send in the query.')
+parser.add_argument('--config', '-c', dest='config', metavar='FILE', type=str, help='A configuration file.')
+parser.add_argument('--command', '--cmd', dest='command', choices=['get', 'set'], required=True, type=str, help='The query command.')
+parser.add_argument('--light_id', '-i', dest='light_id', required=True, type=int, help="The traffic light's id")
+parser.add_argument('--state', '-s', dest='state', choices=['green', 'red'], type=str, help="The light's state")
 
 args = parser.parse_args()
-conf = zenoh.Config.from_file(
-    args.config) if args.config is not None else zenoh.Config()
+conf = zenoh.Config.from_file(args.config) if args.config is not None else zenoh.Config()
 if args.mode is not None:
     conf.insert_json5(zenoh.config.MODE_KEY, json.dumps(args.mode))
 if args.connect is not None:
@@ -74,16 +48,30 @@ if args.listen is not None:
     conf.insert_json5(zenoh.config.LISTEN_KEY, json.dumps(args.listen))
 
 intersection_id = {
-    3699: 'A', 3721: 'A', 3710: 'A', # A
-    3732: 'B', 3754: 'B', 3743: 'B', # B
-    3765: 'C', 3787: 'C', 3798: 'C', # C
-    3552: 'D', 3611: 'D', 3600: 'D', # D
-    3677: 'E', 3666: 'E', 3688: 'E', # E
-    3574: 'F', 3633: 'F', 3622: 'F', # F
-    3644: 'G', 3589: 'G', 3655: 'G'  # G
+    3699: 'A',
+    3721: 'A',
+    3710: 'A',  # A
+    3732: 'B',
+    3754: 'B',
+    3743: 'B',  # B
+    3765: 'C',
+    3787: 'C',
+    3798: 'C',  # C
+    3552: 'D',
+    3611: 'D',
+    3600: 'D',  # D
+    3677: 'E',
+    3666: 'E',
+    3688: 'E',  # E
+    3574: 'F',
+    3633: 'F',
+    3622: 'F',  # F
+    3644: 'G',
+    3589: 'G',
+    3655: 'G',  # G
 }
 
-selector = f'intersection/{intersection_id[args.light_id]}/traffic_light/' + str(args.light_id) + "/state"
+selector = f'intersection/{intersection_id[args.light_id]}/traffic_light/' + str(args.light_id) + '/state'
 
 target = {
     'ALL': QueryTarget.ALL(),
@@ -96,7 +84,7 @@ target = {
 # initiate logging
 zenoh.init_logger()
 
-print("Opening session...")
+print('Opening session...')
 session = zenoh.open(conf)
 
 print("Sending Query '{}'...".format(selector))
@@ -112,11 +100,9 @@ else:
 if replies:
     for reply in replies.receiver:
         try:
-            print(">> Received ('{}': '{}')"
-                .format(reply.ok.key_expr, reply.ok.payload.decode("utf-8")))
-        except:
-            print(">> Received (ERROR: '{}')"
-                .format(reply.err.payload.decode("utf-8")))
+            print(">> Received ('{}': '{}')".format(reply.ok.key_expr, reply.ok.payload.decode('utf-8')))
+        except Exception as _e:
+            print(">> Received (ERROR: '{}')".format(reply.err.payload.decode('utf-8')))
 
 
 session.close()
