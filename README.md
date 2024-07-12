@@ -1,6 +1,6 @@
 # zenoh_autoware_v2x
 
-![](resource/Autoware_V2X_Zenoh_Architecture.svg)
+![V2X Architecture](resource/Autoware_V2X_Zenoh_Architecture.svg)
 
 ## Setup
 
@@ -15,11 +15,13 @@ colcon build --symlink-install
 ```
 
 ## Run
+
 - Run Carla simulator (In native host)
 
 ```shell
 ./CarlaUE4.sh -quality-level=Epic -world-port=2000 -RenderOffScreen
 ```
+
 - in bridge container
 
 ```shell
