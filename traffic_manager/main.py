@@ -78,6 +78,14 @@ current_G = []
 # The number of vehicles in the intersection A, B, C, D, ...
 intersection_status = [current_A, current_B, current_C, current_D, current_E, current_F, current_G]
 
+def format_status(status):
+    formatted = []
+    for i, intersection in enumerate(status):
+        intersection_name = chr(65 + i)
+        for query in intersection:
+            vehicle_id, light, distance = query
+            formatted.append(f"Intersection {intersection_name}: Vehicle {vehicle_id} at light {light} is {distance:.2f} meters away")
+    return "\n".join(formatted)
 
 def consensus(vehicle_id, intersection_id, light, distance):
     global intersection_status, traffic_lights
@@ -114,11 +122,11 @@ def consensus(vehicle_id, intersection_id, light, distance):
     # Append new traffic light query
     if flag == 0:
         intersection_status[idx].append([vehicle_id, light, distance])
-
+    logging.info(format_status(intersection_status))
     # Sorting every queries by vehicle_id
     for current_x in intersection_status:
         current_x.sort()
-        logging.info(current_x)
+        # logging.info(current_x)
         try:
             for query in current_x:
                 # Apply one query that distance below 20
@@ -173,6 +181,11 @@ def main(args):
     traffic_lights = world.get_actors().filter('traffic.traffic_light')
     if traffic_lights:
         logging.info('[traffic manager] Get Carla traffic lights')
+        
+        # # Print traffic lights information
+        # for idx, traffic_light in enumerate(traffic_lights):
+        #     location = traffic_light.get_location()
+        #     logging.info(f"Index: {idx}, Location: {location.x:.2f}, {location.y:.2f}, {location.z:.2f}")
 
     # initiate logging
     zenoh.init_logger()
@@ -186,7 +199,6 @@ def main(args):
 
     def listener(sample: Sample):
         payload = json.loads(sample.payload.decode('utf-8'))
-
         lane_id = int(payload['lane_id'])
         position = payload['position']
         pos_x = float(position['x'])
@@ -198,7 +210,7 @@ def main(args):
         traffic_management(vehicle_id, lane_id, pos_x, pos_y, pos_z)
 
     _sub = session.declare_subscriber(key, listener, reliability=Reliability.RELIABLE())
-
+    
     while True:
         time.sleep(1)
 
