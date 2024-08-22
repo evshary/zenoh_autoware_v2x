@@ -1,6 +1,8 @@
-# zenoh_autoware_v2x
-
+# Zenoh Autoware V2X
+## Architecture
 ![V2X Architecture](resource/Autoware_V2X_Zenoh_Architecture.svg)
+## Sequence Diagram
+<img src="resource/sequence_diagram.svg" alt="Sequence Diagram" width="700" height="800"/>
 
 ## Setup
 
