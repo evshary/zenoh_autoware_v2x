@@ -181,11 +181,6 @@ def main(args):
     traffic_lights = world.get_actors().filter('traffic.traffic_light')
     if traffic_lights:
         logging.info('[traffic manager] Get Carla traffic lights')
-        
-        # # Print traffic lights information
-        # for idx, traffic_light in enumerate(traffic_lights):
-        #     location = traffic_light.get_location()
-        #     logging.info(f"Index: {idx}, Location: {location.x:.2f}, {location.y:.2f}, {location.z:.2f}")
 
     # initiate logging
     zenoh.init_logger()
@@ -210,7 +205,7 @@ def main(args):
         traffic_management(vehicle_id, lane_id, pos_x, pos_y, pos_z)
 
     _sub = session.declare_subscriber(key, listener, reliability=Reliability.RELIABLE())
-    
+
     while True:
         time.sleep(1)
 
