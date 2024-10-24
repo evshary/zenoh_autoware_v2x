@@ -5,6 +5,7 @@ import time
 
 import carla
 import zenoh
+import json
 from zenoh import Sample
 
 log_level = logging.INFO
@@ -50,27 +51,27 @@ value = args.value
 complete = args.complete
 
 id_to_index = {
-    3699: 33,
-    3721: 34,
-    3710: 35,  # A
-    3732: 18,
-    3754: 19,
-    3743: 20,  # B
-    3765: 16,
-    3787: 17,
-    3798: 13,  # C
-    3552: 30,
-    3611: 31,
-    3600: 32,  # D
-    3677: 10,
-    3666: 11,
-    3688: 12,  # E
-    3574: 27,
-    3633: 28,
-    3622: 29,  # F
-    3644: 7,
-    3589: 8,
-    3655: 9,  # G
+    29855: 33,
+    29777: 34,
+    29861: 35,  # A
+    29783: 18,
+    29903: 19,
+    29789: 20,  # B
+    29795: 16,
+    29819: 17,
+    29825: 13,  # C
+    29867: 30,
+    29741: 31,
+    29873: 32,  # D
+    29927: 10,
+    29747: 11,
+    29831: 12,  # E
+    29879: 27,
+    29801: 28,
+    29885: 29,  # F
+    29921: 7,
+    29807: 8,
+    29837: 9,  # G    
 }
 
 A = [33, 34, 35]
@@ -126,13 +127,13 @@ def queryable_callback(query):
     global traffic_lights
 
     # print(f">> [Queryable ] Received Query '{query.selector}'" + (f" with value: {query.value.payload}" if query.value is not None else ""))
-
-    if query.value is None:
+    if query.payload is None:
         # Get traffic light state
         state = get_state(query.selector)
-        query.reply(Sample(str(query.selector), state))
+        query.reply(str(query.selector), str(state))
+        
     else:
-        _new_state = query.value.payload.decode('utf-8')
+        _new_state = query.payload.deserialize(str)
         # set_state(query.selector, new_state)
 
 
@@ -158,16 +159,20 @@ def main(args):
         traffic_lights[i].set_state(carla.TrafficLightState.Red)
 
     # initiate logging
-    zenoh.init_logger()
+    zenoh.try_init_log_from_env()
 
-    logging.info('Opening session...')
-    session = zenoh.open(conf)
+    logging.info("Opening session...")
+    with zenoh.open(conf) as session:
+        logging.info("Declaring Queryable on '{}'...".format(key))
+        session.declare_queryable(key, queryable_callback, complete=complete)
 
-    logging.info("Declaring Queryable on '{}'...".format(key))
-    _queryable = session.declare_queryable(key, queryable_callback, complete)
-
-    while True:
-        time.sleep(1)
+        logging.info("Press CTRL-C to quit...")
+        while True:
+            try:
+                time.sleep(1)
+            except Exception as err:
+                logging.info(err, flush=True)
+                raise
 
 
 if __name__ == '__main__':
