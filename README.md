@@ -11,7 +11,7 @@ sequenceDiagram
     participant tm as Traffic Manager
     participant im as Intersection Manager
 
-    tm ->> im: Load lane_to_light map
+    im ->> tm: Load lane_to_light map
 
     par Normal Traffic Light Operation
         loop Intersection A

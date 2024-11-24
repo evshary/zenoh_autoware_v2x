@@ -4,10 +4,10 @@ from enum import Enum
 
 import rclpy
 import zenoh
+import json
 from autoware_adapi_v1_msgs.msg import VehicleKinematics
-from autoware_auto_perception_msgs.msg import TrafficLight, TrafficSignal, TrafficSignalArray
-from autoware_auto_planning_msgs.msg import PathWithLaneId
-from builtin_interfaces.msg import Time
+from autoware_perception_msgs.msg import TrafficLightGroupArray, TrafficLightGroup, TrafficLightElement
+from tier4_planning_msgs.msg import PathWithLaneId
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
 from zenoh import QueryTarget
@@ -15,50 +15,37 @@ from zenoh import QueryTarget
 """
 ref link : https://github.com/tier4/autoware_auto_msgs/blob/tier4/main/autoware_auto_perception_msgs/msg/TrafficLight.idl
 
-module autoware_auto_perception_msgs {
-  module msg {
-    module TrafficLight_Constants {
-      // constants for color
-      const uint8 RED = 1;
-      const uint8 AMBER = 2;
-      const uint8 GREEN = 3;
-      const uint8 WHITE = 4;
+# constants for common use
+uint8 UNKNOWN = 0
 
-      // constants for shape
-      const uint8 CIRCLE = 5;
-      const uint8 LEFT_ARROW = 6;
-      const uint8 RIGHT_ARROW = 7;
-      const uint8 UP_ARROW = 8;
-      const uint8 UP_LEFT_ARROW = 9;
-      const uint8 UP_RIGHT_ARROW = 10;
-      const uint8 DOWN_ARROW = 11;
-      const uint8 DOWN_LEFT_ARROW = 12;
-      const uint8 DOWN_RIGHT_ARROW = 13;
-      const uint8 CROSS = 14;
+# constants for color
+uint8 RED = 1
+uint8 AMBER = 2
+uint8 GREEN = 3
+uint8 WHITE = 4
 
-      // constants for status
-      const uint8 SOLID_OFF = 15;
-      const uint8 SOLID_ON = 16;
-      const uint8 FLASHING = 17;
+# constants for shape
+uint8 CIRCLE = 1
+uint8 LEFT_ARROW = 2
+uint8 RIGHT_ARROW = 3
+uint8 UP_ARROW = 4
+uint8 UP_LEFT_ARROW=5
+uint8 UP_RIGHT_ARROW=6
+uint8 DOWN_ARROW = 7
+uint8 DOWN_LEFT_ARROW = 8
+uint8 DOWN_RIGHT_ARROW = 9
+uint8 CROSS = 10
 
-      // constants for common use
-      const uint8 UNKNOWN = 18;
-    };
-    struct TrafficLight {
-      @default (value=0)
-      uint8 color;
+# constants for status
+uint8 SOLID_OFF = 1
+uint8 SOLID_ON = 2
+uint8 FLASHING = 3
 
-      @default (value=0)
-      uint8 shape;
-
-      @default (value=0)
-      uint8 status;
-
-      @default (value=0.0)
-      float confidence;
-    };
-  };
-};
+# variables
+uint8 color
+uint8 shape
+uint8 status
+float32 confidence
 """
 
 parser = ArgumentParser()
@@ -75,16 +62,23 @@ class Pose:
         self.pos_z = pos_z
 
 
+class Color(Enum):
+    RED = 1
+    AMBER = 2
+    GREEN = 3
+    WHITE = 4
+
+
 class Shape(Enum):
-    CIRCLE = 5
-    LEFT_ARROW = 6
-    RIGHT_ARROW = 7
-    UP_ARROW = 8
+    CIRCLE = 1
+    LEFT_ARROW = 2
+    RIGHT_ARROW = 3
+    UP_ARROW = 4
 
 
 class Status(Enum):
-    OFF = 15
-    ON = 16
+    OFF = 1
+    ON = 2
 
 
 confidence = 1.0
@@ -92,51 +86,52 @@ confidence = 1.0
 color_dict = {'Red': 1, 'Yellow': 2, 'Green': 3, 'White': 4}
 
 lane_id = [
-    1549,
-    1136,
-    1556,
-    1605,
-    1150,
-    1143,
-    1419,
-    1426,
-    1157,
-    1563,
-    1064,
-    1570,
-    1433,
-    1440,
-    1071,
-    1577,
-    1234,
-    1584,
-    1447,
-    1454,
-    1241,
+    25355,
+    21186,
+    25648,  # A
+    21093,
+    26359,
+    21828,  # B
+    21507,
+    24283,
+    24578,  # C
+    25539,
+    18400,
+    25838,  # D
+    24756,
+    17947,
+    24469,  # E
+    25743,
+    22808,
+    26284,  # F
+    25202,
+    22355,
+    24667
 ]
 
+
 light_id = [
-    3699,
-    3721,
-    3710,
-    3754,
-    3743,
-    3732,
-    3787,
-    3798,
-    3765,
-    3552,
-    3611,
-    3600,
-    3688,
-    3677,
-    3666,
-    3574,
-    3633,
-    3622,
-    3655,
-    3644,
-    3589,
+    29855,
+    29777,
+    29861,  # A
+    29783,
+    29903,
+    29789,  # B
+    29795,
+    29819,
+    29825,  # C
+    29867,
+    29741,
+    29873,  # D
+    29927,
+    29747,
+    29831,  # E
+    29879,
+    29801,
+    29885,  # F
+    29921,
+    29807,
+    29837
 ]
 
 
@@ -154,41 +149,40 @@ class SignalPub(Node):
     def __init__(self, nodeName):
         super().__init__(nodeName)
         qos_profile = QoSProfile(
-            reliability=2,  # RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT
+            reliability=1,  # RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT
             history=1,  # RMW_QOS_POLICY_HISTORY_KEEP_LAST
             depth=1,
         )
-        self.publication = self.create_publisher(TrafficSignalArray, 'perception/traffic_light_recognition/traffic_signals', 1)
+        self.publication = self.create_publisher(TrafficLightGroupArray, '/perception/traffic_light_recognition/traffic_signals', qos_profile=qos_profile,)
         self.subscription = self.create_subscription(
             PathWithLaneId,
             'planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id',
             self.signal_callback,
             qos_profile=qos_profile,
         )
-        self.pose_subscription = self.create_subscription(VehicleKinematics, 'api/vehicle/kinematics', self.pose_callback, 10)
-        self.subscription
-        self.pose_subscription
+        self.pose_subscription = self.create_subscription(VehicleKinematics, '/api/vehicle/kinematics', self.pose_callback, QoSProfile(
+            reliability=2,  # RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT
+            history=1,  # RMW_QOS_POLICY_HISTORY_KEEP_LAST
+            depth=1,
+        ))
 
         self.pose_publisher = session.declare_publisher(f'vehicle/{args.vehicle}/pose')
-        self.red_signal = self.publish_red_signal()
+        self.publish_red_signal()
+
 
     def publish_red_signal(self):
         global light_id
 
-        # Turn all traffic lights into red
-        for id in light_id:
-            color = (1, Shape.CIRCLE.value, Status.ON.value, confidence)
-            traffic_signals = self.traffic_signals_gen(id, color)
-            self.publication.publish(traffic_signals)
-            selector, target, color = self.query_light_status(id)
-            _replies = session.get(selector, zenoh.Queue(), target=target, value='red')
+        self.publish_traffic_light_to_autoware(light_id, Color.RED.value)
+
 
     def publish_pose(self):
         global pos_x, pos_y, pos_z, pos_lane_id
 
         pose = {'lane_id': pos_lane_id, 'position': {'x': pos_x, 'y': pos_y, 'z': pos_z}}
 
-        self.pose_publisher.put(pose)
+        self.pose_publisher.put(json.dumps(pose))
+
 
     def pose_callback(self, data):
         global pos_x, pos_y, pos_z
@@ -200,6 +194,7 @@ class SignalPub(Node):
 
         self.publish_pose()
 
+
     def signal_callback(self, data):
         global color_dict, light_id, lane_id
         global pos_lane_id
@@ -210,100 +205,84 @@ class SignalPub(Node):
             if any(id in d.lane_ids for id in lane_id):
                 if not closest_lane and len(d.lane_ids) == 1:
                     closest_lane.append(d.lane_ids[0])
-                    # print(closest_lane[0])
                     pos_lane_id = closest_lane[0]
                     idx = lane_id.index(d.lane_ids[0])
                     tl_id = light_id[idx]
+
+                     # Sync Autoware and Carla's traffic light signal
                     selector, target, color = self.query_light_status(tl_id)
-
-                    # Sync Autoware and Carla's traffic light signal
-                    tl_color = (color_dict[color], Shape.CIRCLE.value, Status.ON.value, confidence)
-                    traffic_signals = self.traffic_signals_gen(tl_id, tl_color)
-
-                    self.publication.publish(traffic_signals)
+                    
+                    self.publish_traffic_light_to_autoware(tl_id, color_dict.get(color,1))
+                   
                     self.publish_pose()
                     break
             else:
                 pass
 
-    def stamp_gen(self, frame_id=''):
-        stamp = Time()
-        t = self.get_clock().now()
-        stamp = t.to_msg()
-        return stamp
 
-    def traffic_signal_element_gen(self, state):
-        tse = TrafficLight()
-        tse.color = state[0]
-        tse.shape = state[1]
-        tse.status = state[2]
-        tse.confidence = state[3]
-        # print(tse)
-        return tse
+    def publish_traffic_light_to_autoware(self, tl_list:list, color:int):
+        global light_id
+        traffic_light_group_array = TrafficLightGroupArray()
+        traffic_light_group_array.stamp = self.get_clock().now().to_msg()
 
-    def traffic_signal_gen(self, tl_id, state):
-        ts = TrafficSignal()
-        ts.map_primitive_id = tl_id
-        ts.lights.append(self.traffic_signal_element_gen(state))
-        return ts
+        for light in light_id:
+            traffic_light_group = TrafficLightGroup()
+            traffic_light_group.traffic_light_group_id = light
+            element = TrafficLightElement()
+            element.color = color
+            element.shape = Shape.CIRCLE.value
+            element.status = Status.ON.value
+            element.confidence = 1.0
+            traffic_light_group.elements.append(element)
+            traffic_light_group_array.traffic_light_groups.append(traffic_light_group)
+        
+        self.publication.publish(traffic_light_group_array)
+        # TODO: Use the query_light_status function here to set Carla's traffic lights.
 
-    def traffic_signals_gen(self, tl_id, state):
-        stamp = self.stamp_gen()
-        ts = self.traffic_signal_gen(tl_id, state)
-        traffic_signals = TrafficSignalArray()
-        traffic_signals.header.stamp = stamp
-        # traffic_signals.header.seq = 0
-        # traffic_signals.frame_id = ''
-        traffic_signals.signals.append(ts)
-        return traffic_signals
 
     def query_light_status(self, tl_id):
         # Match intersection ID and traffic light ID
         intersection_id = {
-            3699: 'A',
-            3721: 'A',
-            3710: 'A',  # A
-            3732: 'B',
-            3754: 'B',
-            3743: 'B',  # B
-            3765: 'C',
-            3787: 'C',
-            3798: 'C',  # C
-            3552: 'D',
-            3611: 'D',
-            3600: 'D',  # D
-            3677: 'E',
-            3666: 'E',
-            3688: 'E',  # E
-            3574: 'F',
-            3633: 'F',
-            3622: 'F',  # F
-            3644: 'G',
-            3589: 'G',
-            3655: 'G',  # G
+            29855: 'A',
+            29777: 'A',
+            29861: 'A',  # A
+            29783: 'B',
+            29903: 'B',
+            29789: 'B',  # B
+            29795: 'C',
+            29819: 'C',
+            29825: 'C',  # C
+            29867: 'D',
+            29741: 'D',
+            29873: 'D',  # D
+            29927: 'E',
+            29747: 'E',
+            29831: 'E',  # E
+            29879: 'F',
+            29801: 'F',
+            29885: 'F',  # F
+            29921: 'G',
+            29807: 'G',
+            29837: 'G',  # G
         }
 
         selector = f'intersection/{intersection_id[tl_id]}/traffic_light/' + str(tl_id) + '/state'
 
         target = {
-            'ALL': QueryTarget.ALL(),
-            'BEST_MATCHING': QueryTarget.BEST_MATCHING(),
-            'ALL_COMPLETE': QueryTarget.ALL_COMPLETE(),
+            'ALL': QueryTarget.ALL,
+            'BEST_MATCHING': QueryTarget.BEST_MATCHING,
+            'ALL_COMPLETE': QueryTarget.ALL_COMPLETE,
         }.get('BEST_MATCHING')
+        payload = None
+        replies = session.get(selector, target=target, payload=None)
+        
 
-        replies = session.get(selector, zenoh.Queue(), target=target, value=None)
-
-        if replies:
-            for reply in replies.receiver:
-                try:
-                    payload = reply.ok.payload.decode('utf-8')
-                    # print(">> Received ('{}': '{}')"
-                    #     .format(reply.ok.key_expr, reply.ok.payload.decode("utf-8")))
+        for reply in replies:
+                try:    
+                    payload = reply.ok.payload.deserialize(str)
                 except Exception as _e:
-                    payload = reply.err.payload.decode('utf-8')
-                    # print(">> Received (ERROR: '{}')"
-                    #     .format(reply.err.payload.decode("utf-8")))
-
+                    payload = reply.err.payload.deserialize(str)
+ 
         return selector, target, payload
 
 

@@ -33,27 +33,27 @@ key = args.key
 traffic_lights = None
 
 lane_to_light = {
-    1549: 33,
-    1136: 34,
-    1556: 35,  # A
-    1143: 18,
-    1605: 19,
-    1150: 20,  # B
-    1157: 16,
-    1419: 17,
-    1426: 13,  # C
-    1563: 30,
-    1064: 31,
-    1570: 32,  # D
-    1440: 10,
-    1071: 11,
-    1433: 12,  # E
-    1577: 27,
-    1234: 28,
-    1584: 29,  # F
-    1454: 7,
-    1241: 8,
-    1447: 9,  # G
+    25355: 33,
+    21186: 34,
+    25648: 35,  # A
+    21093: 18,
+    26359: 19,
+    21828: 20,  # B
+    21507: 16,
+    24283: 17,
+    24578: 13,  # C
+    25539: 30,
+    18400: 31,
+    25838: 32,  # D
+    24756: 10,
+    17947: 11,
+    24469: 12,  # E
+    25743: 27,
+    22808: 28,
+    26284: 29,  # F
+    25202: 7,
+    22355: 8,
+    24667: 9,  # G
 }
 
 
@@ -78,6 +78,14 @@ current_G = []
 # The number of vehicles in the intersection A, B, C, D, ...
 intersection_status = [current_A, current_B, current_C, current_D, current_E, current_F, current_G]
 
+def format_status(status):
+    formatted = []
+    for i, intersection in enumerate(status):
+        intersection_name = chr(65 + i)
+        for query in intersection:
+            vehicle_id, light, distance = query
+            formatted.append(f"Intersection {intersection_name}: Vehicle {vehicle_id} at light {light} is {distance:.2f} meters away")
+    return "\n".join(formatted)
 
 def consensus(vehicle_id, intersection_id, light, distance):
     global intersection_status, traffic_lights
@@ -96,8 +104,6 @@ def consensus(vehicle_id, intersection_id, light, distance):
 
     flag = 0
 
-    # logging.info(f'{vehicle_id}, {light}, {distance}')
-
     # Check the traffic light query exist or not
     # query = [vehicle_id, light_id, distance]
     for current_x in intersection_status:
@@ -114,11 +120,12 @@ def consensus(vehicle_id, intersection_id, light, distance):
     # Append new traffic light query
     if flag == 0:
         intersection_status[idx].append([vehicle_id, light, distance])
+    logging.info(format_status(intersection_status))
 
     # Sorting every queries by vehicle_id
     for current_x in intersection_status:
         current_x.sort()
-        logging.info(current_x)
+        # logging.info(current_x)
         try:
             for query in current_x:
                 # Apply one query that distance below 20
@@ -152,11 +159,7 @@ def traffic_management(vehicle_id, lane_id, x, y, z):
 
         # The y-axis has a negative sign difference between Autoware topic and Carla sim.
         vehicle_location = carla.Location(x, y * -1, z)
-
         distance = vehicle_location.distance(tl_location)
-
-        # logging.info(f'The vehicle {vehicle_id} is approaching intersection {intersection_id} and will arrive in {distance:.2f} meters.')
-
         consensus(vehicle_id, intersection_id, light, distance)
 
 
@@ -175,30 +178,27 @@ def main(args):
         logging.info('[traffic manager] Get Carla traffic lights')
 
     # initiate logging
-    zenoh.init_logger()
+    zenoh.try_init_log_from_env()
 
-    print('Opening session...')
+    logging.info('Opening session...')
     session = zenoh.open(conf)
 
-    print("Declaring Subscriber on '{}'...".format(key))
+    logging.info("Declaring Subscriber on '{}'...".format(key))
 
     logging.info('Connection Successed')
 
     def listener(sample: Sample):
-        payload = json.loads(sample.payload.decode('utf-8'))
-
+        payload = json.loads(sample.payload.deserialize(str))
         lane_id = int(payload['lane_id'])
         position = payload['position']
         pos_x = float(position['x'])
         pos_y = float(position['y'])
         pos_z = float(position['z'])
-
         vehicle_id = str(sample.key_expr).split('/')[1]
 
         traffic_management(vehicle_id, lane_id, pos_x, pos_y, pos_z)
 
-    _sub = session.declare_subscriber(key, listener, reliability=Reliability.RELIABLE())
-
+    session.declare_subscriber(key, listener, reliability=Reliability.RELIABLE)
     while True:
         time.sleep(1)
 
