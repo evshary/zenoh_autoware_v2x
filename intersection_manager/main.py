@@ -133,7 +133,7 @@ def queryable_callback(query):
         query.reply(str(query.selector), str(state))
         
     else:
-        _new_state = query.payload.deserialize(str)
+        _new_state = query.payload.to_string()
         # set_state(query.selector, new_state)
 
 

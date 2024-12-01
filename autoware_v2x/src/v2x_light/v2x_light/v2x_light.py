@@ -10,7 +10,7 @@ from autoware_perception_msgs.msg import TrafficLightGroupArray, TrafficLightGro
 from tier4_planning_msgs.msg import PathWithLaneId
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
-from zenoh import QueryTarget
+from zenoh import QueryTarget, Reliability, Config
 
 """
 ref link : https://github.com/tier4/autoware_auto_msgs/blob/tier4/main/autoware_auto_perception_msgs/msg/TrafficLight.idl
@@ -141,8 +141,8 @@ pos_x = 0.0
 pos_y = 0.0
 pos_z = 0.0
 
-
-session = zenoh.open()
+conf = Config()
+session = zenoh.open(conf)
 
 
 class SignalPub(Node):
@@ -166,7 +166,7 @@ class SignalPub(Node):
             depth=1,
         ))
 
-        self.pose_publisher = session.declare_publisher(f'vehicle/{args.vehicle}/pose')
+        self.pose_publisher = session.declare_publisher(f'vehicle/{args.vehicle}/pose', reliability=Reliability.RELIABLE)
         self.publish_red_signal()
 
 
@@ -279,9 +279,9 @@ class SignalPub(Node):
 
         for reply in replies:
                 try:    
-                    payload = reply.ok.payload.deserialize(str)
+                    payload = reply.ok.payload.to_string()
                 except Exception as _e:
-                    payload = reply.err.payload.deserialize(str)
+                    payload = reply.err.payload.to_string()
  
         return selector, target, payload
 
