@@ -5,7 +5,7 @@ import time
 
 import carla
 import zenoh
-from zenoh import Reliability, Sample
+from zenoh import Sample
 
 log_level = logging.INFO
 logging.basicConfig(format='%(levelname)s: %(message)s', level=log_level)
@@ -188,7 +188,7 @@ def main(args):
     logging.info('Connection Successed')
 
     def listener(sample: Sample):
-        payload = json.loads(sample.payload.deserialize(str))
+        payload = json.loads(sample.payload.to_string())
         lane_id = int(payload['lane_id'])
         position = payload['position']
         pos_x = float(position['x'])
@@ -198,7 +198,7 @@ def main(args):
 
         traffic_management(vehicle_id, lane_id, pos_x, pos_y, pos_z)
 
-    session.declare_subscriber(key, listener, reliability=Reliability.RELIABLE)
+    session.declare_subscriber(key, listener)
     while True:
         time.sleep(1)
 
