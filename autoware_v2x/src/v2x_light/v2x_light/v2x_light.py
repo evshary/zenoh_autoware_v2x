@@ -1,16 +1,16 @@
 #!/usr/bin/env python
+import json
 from argparse import ArgumentParser
 from enum import Enum
 
 import rclpy
 import zenoh
-import json
 from autoware_adapi_v1_msgs.msg import VehicleKinematics
-from autoware_perception_msgs.msg import TrafficLightGroupArray, TrafficLightGroup, TrafficLightElement
-from tier4_planning_msgs.msg import PathWithLaneId
+from autoware_perception_msgs.msg import TrafficLightElement, TrafficLightGroup, TrafficLightGroupArray
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
-from zenoh import QueryTarget, Reliability, Config
+from tier4_planning_msgs.msg import PathWithLaneId
+from zenoh import Config, QueryTarget, Reliability
 
 """
 ref link : https://github.com/tier4/autoware_auto_msgs/blob/tier4/main/autoware_auto_perception_msgs/msg/TrafficLight.idl
@@ -153,7 +153,8 @@ class SignalPub(Node):
             history=1,  # RMW_QOS_POLICY_HISTORY_KEEP_LAST
             depth=1,
         )
-        self.publication = self.create_publisher(TrafficLightGroupArray, '/perception/traffic_light_recognition/traffic_signals', qos_profile=qos_profile,)
+        self.publication = self.create_publisher(TrafficLightGroupArray, '/perception/traffic_light_recognition/traffic_signals',
+                                                 qos_profile=qos_profile,)
         self.subscription = self.create_subscription(
             PathWithLaneId,
             'planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id',
