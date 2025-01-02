@@ -22,7 +22,7 @@ line-length = 150
 ## Ignore some files
 exclude = [
     # This is ROS generated test file
-    "v2x_light/test/*",
+    "autoware_v2x/src/v2x_light/test/*",
 ]
 
 [tool.ruff.lint]
