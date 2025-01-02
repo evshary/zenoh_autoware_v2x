@@ -5,8 +5,6 @@ import time
 
 import carla
 import zenoh
-import json
-from zenoh import Sample
 
 log_level = logging.INFO
 logging.basicConfig(format='%(levelname)s: %(message)s', level=log_level)
