@@ -67,7 +67,7 @@ colcon build --symlink-install
 - Run Carla simulator (In native host)
 
 ```shell
-./CarlaUE4.sh -quality-level=Epic -world-port=2000 -RenderOffScreen
+./CarlaUE4.sh -quality-level=Epic -world-port=2000 -RenderOffScreen -prefernvidia
 ```
 
 - in bridge container
