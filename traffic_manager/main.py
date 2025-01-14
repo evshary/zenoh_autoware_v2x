@@ -1,207 +1,227 @@
-import argparse
+import asyncio
+import heapq
 import json
 import logging
-import time
+import math
+import os
+import queue
+from functools import wraps
 
-import carla
 import zenoh
-from zenoh import Sample
 
-log_level = logging.INFO
-logging.basicConfig(format='%(levelname)s: %(message)s', level=log_level)
-
-# --- Command line argument parsing --- --- --- --- --- ---
-parser = argparse.ArgumentParser(prog='z_sub', description='zenoh sub example')
-parser.add_argument('--mode', '-m', dest='mode', choices=['peer', 'client'], type=str, help='The zenoh session mode.')
-parser.add_argument('--connect', '-e', dest='connect', metavar='ENDPOINT', action='append', type=str, help='Endpoints to connect to.')
-parser.add_argument('--listen', '-l', dest='listen', metavar='ENDPOINT', action='append', type=str, help='Endpoints to listen on.')
-parser.add_argument('--key', '-k', dest='key', default='vehicle/**/pose', type=str, help='The key expression to subscribe to.')
-parser.add_argument('--config', '-c', dest='config', metavar='FILE', type=str, help='A configuration file.')
-parser.add_argument('--host', dest='host', type=str, default='localhost', help='Carla client host connection.')
-parser.add_argument('--port', '-p', dest='port', type=int, default=2000, help='Carla client port number.')
-
-args = parser.parse_args()
-conf = zenoh.Config.from_file(args.config) if args.config is not None else zenoh.Config()
-if args.mode is not None:
-    conf.insert_json5(zenoh.config.MODE_KEY, json.dumps(args.mode))
-if args.connect is not None:
-    conf.insert_json5(zenoh.config.CONNECT_KEY, json.dumps(args.connect))
-if args.listen is not None:
-    conf.insert_json5(zenoh.config.LISTEN_KEY, json.dumps(args.listen))
-key = args.key
-
-traffic_lights = None
-
-lane_to_light = {
-    25355: 33,
-    21186: 34,
-    25648: 35,  # A
-    21093: 18,
-    26359: 19,
-    21828: 20,  # B
-    21507: 16,
-    24283: 17,
-    24578: 13,  # C
-    25539: 30,
-    18400: 31,
-    25838: 32,  # D
-    24756: 10,
-    17947: 11,
-    24469: 12,  # E
-    25743: 27,
-    22808: 28,
-    26284: 29,  # F
-    25202: 7,
-    22355: 8,
-    24667: 9,  # G
-}
+logging.basicConfig(format=' %(levelname)s: %(message)s', level=logging.INFO)
 
 
-A = [33, 34, 35]
-B = [18, 19, 20]
-C = [13, 16, 17]
-D = [30, 31, 32]
-E = [10, 11, 12]
-F = [27, 28, 29]
-G = [7, 8, 9]
+def trace(func):
+    if asyncio.iscoroutinefunction(func):
+
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            self = args[0] if args else None
+            section_id = getattr(self, 'section_id', '')
+            prefix = f'[Traffic Manager][{section_id}]' if section_id else '[Traffic Manager]'
+            logging.debug(f'{prefix} Starting async: {func.__name__}')
+            result = await func(*args, **kwargs)
+            logging.debug(f'{prefix} Finished async: {func.__name__}')
+            return result
+
+    else:
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            self = args[0] if args else None
+            section_id = getattr(self, 'section_id', '')
+            prefix = f'[Traffic Manager][{section_id}]' if section_id else '[Traffic Manager]'
+            logging.debug(f'{prefix} Starting sync: {func.__name__}')
+            result = func(*args, **kwargs)
+            logging.debug(f'{prefix} Finished sync: {func.__name__}')
+            return result
+
+    return wrapper
 
 
-# Current intersection status
-current_A = []
-current_B = []
-current_C = []
-current_D = []
-current_E = []
-current_F = []
-current_G = []
+class Intersection:
+    def __init__(self, section_id, lane_info):
+        self.section_id = section_id
+        self.lane_info = lane_info
+        self.vehicle_passing = False
 
-# The number of vehicles in the intersection A, B, C, D, ...
-intersection_status = [current_A, current_B, current_C, current_D, current_E, current_F, current_G]
+        # key=lane_id, value=vehicle heap
+        self.request_queue = {lane_id: [] for lane_id in lane_info.keys()}
+        self.vehicle_map = {}
+        self.vehicle_push = {}
 
-def format_status(status):
-    formatted = []
-    for i, intersection in enumerate(status):
-        intersection_name = chr(65 + i)
-        for query in intersection:
-            vehicle_id, light, distance = query
-            formatted.append(f"Intersection {intersection_name}: Vehicle {vehicle_id} at light {light} is {distance:.2f} meters away")
-    return "\n".join(formatted)
+    @trace
+    def _decide_priority_lane(self, tx):
+        _top_list = []
+        for _, vehicle_heap in self.request_queue.items():
+            if vehicle_heap:
+                _top_list.append(vehicle_heap[0])
 
-def consensus(vehicle_id, intersection_id, light, distance):
-    global intersection_status, traffic_lights
+        if _top_list:
+            self.vehicle_passing = True
+            highest_priority = min(_top_list, key=lambda x: x[0])
+            (_, specified_lane, specified_tl) = highest_priority
+            # duration = (len(self.request_queue[specified_lane])-1)*3+5
+            duration = 15
+            tx.put((self.section_id, specified_tl, duration))
 
-    iter = enumerate(zip(A, B, C, D, E, F, G))
-    intersection = [A, B, C, D, E, F, G]
+    @trace
+    def _distance_measure(self, vehicle_id, vehicle_pos, lane_id):
+        light_info = self.lane_info.get(lane_id)
+        (x1, y1) = vehicle_pos
+        (x2, y2) = light_info.get('light_pos')
+        light_id = light_info.get('light_id')
+        distance = math.hypot(x1 - x2, y1 - y2)
+        if distance <= 15:
+            self.vehicle_push[vehicle_id] = True
+            heapq.heappush(self.request_queue[lane_id], (vehicle_id, lane_id, light_id))
+            logging.debug(f"[Traffic Manager] Vehicle {vehicle_id} added to lane {lane_id}'s heap with distance {distance}")
 
-    # intersection index
-    idx = 0
+    @trace
+    async def monitor_request_queue(self, tx):
+        while True:
+            if self.vehicle_passing:
+                await asyncio.sleep(0)  # to another section
+                continue
+            has_requests = any(queue for queue in self.request_queue.values())
 
-    for i, (a, b, c, d, e, f, g) in iter:
+            if has_requests:
+                logging.debug('[Traffic Manager] monitor_request_queue', self.request_queue)
+                self._decide_priority_lane(tx)
+                await asyncio.sleep(0)  # to another section
+            else:
+                await asyncio.sleep(0)
+
+    @trace
+    def handle_query(self, vehicle_info):
+        (vehicle_id, vehicle_pos, lane_id) = vehicle_info
+        self.vehicle_map[vehicle_id] = lane_id
+        if self.vehicle_push.get(vehicle_id):
+            return
+        self._distance_measure(vehicle_id, vehicle_pos, lane_id)
+
+    @trace
+    def change_state(self, vehicle_id):
+        # maintain leaving vehicles
         try:
-            idx = [a, b, c, d, e, f, g].index(light)
-        except Exception as _e:
-            pass
+            lane_id = self.vehicle_map[vehicle_id]
+            del self.vehicle_map[vehicle_id]
+            del self.vehicle_push[vehicle_id]
+            for idx, (v_id, _) in enumerate(self.self.request_queue[lane_id]):
+                if v_id == vehicle_id:
+                    self.request_queue[lane_id][idx] = self.request_queue[lane_id][-1]
+                    self.request_queue[lane_id].pop()
+                    heapq.heapify(self.request_queue[lane_id])
 
-    flag = 0
-
-    # Check the traffic light query exist or not
-    # query = [vehicle_id, light_id, distance]
-    for current_x in intersection_status:
-        for index, query in enumerate(current_x):
-            if vehicle_id in query[0]:
-                flag = 1
-                # New query arrived
-                if light != query[1]:
-                    current_x.remove([query[0], query[1], query[2]])
-                    flag = 0
-                else:
-                    query[2] = distance  # Update distance
-
-    # Append new traffic light query
-    if flag == 0:
-        intersection_status[idx].append([vehicle_id, light, distance])
-    logging.info(format_status(intersection_status))
-
-    # Sorting every queries by vehicle_id
-    for current_x in intersection_status:
-        current_x.sort()
-        # logging.info(current_x)
-        try:
-            for query in current_x:
-                # Apply one query that distance below 20
-                if query[2] < 20:
-                    for i in intersection[idx]:
-                        if i != query[1]:
-                            traffic_lights[i].set_state(carla.TrafficLightState.Red)
-                    traffic_lights[query[1]].set_state(carla.TrafficLightState.Green)
-                    break
-        except Exception as _e:
+            self.vehicle_passing = False
+        except Exception as _:
             pass
 
 
-def traffic_management(vehicle_id, lane_id, x, y, z):
-    if lane_id != 0:
-        light = lane_to_light[lane_id]
+def load_map_info(file_path):
+    with open(file_path, 'r') as f:
+        map_info = json.load(f)
 
-        iter = enumerate(zip(A, B, C, D, E, F, G))
-        _intersection = [A, B, C, D, E, F, G]
-
-        idx = 0
-
-        for i, (a, b, c, d, e, f, g) in iter:
-            try:
-                idx = [a, b, c, d, e, f, g].index(light)
-                intersection_id = chr(idx + 65)
-            except Exception as _e:
-                pass
-
-        tl_location = traffic_lights[light].get_location()
-
-        # The y-axis has a negative sign difference between Autoware topic and Carla sim.
-        vehicle_location = carla.Location(x, y * -1, z)
-        distance = vehicle_location.distance(tl_location)
-        consensus(vehicle_id, intersection_id, light, distance)
+    lane_to_light = {}
+    lane_to_intersection = {}
+    for section_id, lanes in map_info['intersections'].items():
+        section = {}
+        for lane in lanes:
+            lane_id = lane.get('autoware_lane')
+            light_id = lane.get('autoware_traffic_light')
+            tl_pos = lane.get('traffic_light_position')
+            section[lane_id] = {
+                'light_id': light_id,
+                'light_pos': (float(tl_pos.get('x')), float(tl_pos.get('y'))),
+            }
+            lane_to_intersection[lane_id] = section_id
+        lane_to_light[section_id] = section
+    return lane_to_light, lane_to_intersection
 
 
-def main(args):
-    global traffic_lights
-
-    # create a client in the Carla simulator
-    client = carla.Client(args.host, args.port)
-    client.set_timeout(10.0)
-    # client.get_available_maps()
-    world = client.get_world()
-
-    # Get traffic lights
-    traffic_lights = world.get_actors().filter('traffic.traffic_light')
-    if traffic_lights:
-        logging.info('[traffic manager] Get Carla traffic lights')
-
-    # initiate logging
-    zenoh.try_init_log_from_env()
-
-    logging.info('Opening session...')
-    session = zenoh.open(conf)
-
-    logging.info("Declaring Subscriber on '{}'...".format(key))
-
-    logging.info('Connection Successed')
-
-    def listener(sample: Sample):
-        payload = json.loads(sample.payload.to_string())
-        lane_id = int(payload['lane_id'])
-        position = payload['position']
-        pos_x = float(position['x'])
-        pos_y = float(position['y'])
-        pos_z = float(position['z'])
-        vehicle_id = str(sample.key_expr).split('/')[1]
-
-        traffic_management(vehicle_id, lane_id, pos_x, pos_y, pos_z)
-
-    session.declare_subscriber(key, listener)
+@trace
+async def _send_decision(session, tx):
     while True:
-        time.sleep(1)
+        while not tx.empty():
+            result = tx.get()
+            (section, traffic_light, duration) = result
+            get_key = f'intersection/{section}/traffic_light/{traffic_light}/state'
+            payload = {'state': 'Green', 'duration': str(duration)}
+            logging.info(f"[Traffic Manager] Sending Query '{get_key}'...payload: '{payload}'...")
+            _ = session.get(get_key, payload=str(payload), timeout=5.0)
+        await asyncio.sleep(0)
+
+
+@trace
+async def subscriber(session):
+    vehicle_trace = {}
+
+    @trace
+    def listener(sample: zenoh.Sample):
+        payload = json.loads(sample.payload.to_string())
+        lane_id = int(payload.get('lane_id'))
+        position = payload.get('position')
+        pos_x = float(position.get('x'))
+        pos_y = float(position.get('y'))
+        vehicle_id = int(str(sample.key_expr).rsplit('/v')[-1])
+
+        vehicle_info = (vehicle_id, (pos_x, pos_y), lane_id)
+
+        curr_section = lane_to_intersection.get(lane_id)
+        if curr_section is not None:
+            if vehicle_trace.get(vehicle_id) is not None:
+                prev_section = vehicle_trace.get(vehicle_id)
+                if prev_section != curr_section:
+                    intersections.get(prev_section).change_state(vehicle_id)
+            vehicle_trace[vehicle_id] = curr_section
+            intersections.get(curr_section).handle_query(vehicle_info)
+
+    logging.info("[Traffic Manager] Declaring Subscriber on 'vehicle/pose/**'...")
+
+    session.declare_subscriber('vehicle/pose/**', listener)
+
+    while True:
+        await asyncio.sleep(0)
+
+
+@trace
+async def decision_making(session):
+    tx = queue.Queue()
+    tasks = []
+    for intersection in intersections.values():
+        tasks.append(intersection.monitor_request_queue(tx))
+    tasks.append(_send_decision(session, tx))
+    await asyncio.gather(*tasks)
+
+
+async def start_sub_and_decision_making():
+    # initiate logging
+    zenoh.init_log_from_env_or('error')
+    logging.info('[Traffic Manager] Opening session...')
+    with zenoh.open(zenoh.Config()) as session:
+        await asyncio.gather(*[subscriber(session), decision_making(session)])
 
 
 if __name__ == '__main__':
-    main(args)
+    import argparse
+
+    parser = argparse.ArgumentParser(prog='traffic_manager')
+    default_config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../map_info.json')
+    parser.add_argument(
+        '--map-info',
+        dest='map_info',
+        type=str,
+        default=default_config_path,
+        help='Path to the map information file.',
+    )
+
+    args = parser.parse_args()
+
+    lane_to_light, lane_to_intersection = load_map_info(args.map_info)
+
+    intersections = {}
+    for section_id, lane_info in lane_to_light.items():
+        intersections[section_id] = Intersection(section_id, lane_info)
+
+    asyncio.run(start_sub_and_decision_making())

@@ -167,7 +167,7 @@ class SignalPub(Node):
             depth=1,
         ))
 
-        self.pose_publisher = session.declare_publisher(f'vehicle/{args.vehicle}/pose', reliability=Reliability.RELIABLE)
+        self.pose_publisher = session.declare_publisher(f'vehicle/pose/{args.vehicle}', reliability=Reliability.RELIABLE)
         self.publish_red_signal()
 
 
@@ -212,7 +212,6 @@ class SignalPub(Node):
 
                      # Sync Autoware and Carla's traffic light signal
                     selector, target, color = self.query_light_status(tl_id)
-                    
                     self.publish_traffic_light_to_autoware(tl_id, color_dict.get(color,1))
                    
                     self.publish_pose()
