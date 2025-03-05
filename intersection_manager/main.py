@@ -70,9 +70,9 @@ class Intersection:
     @trace
     async def auto_changing_state(self):
         """Automatically change signals periodically for Intersection."""
-        green_cycle = list(self.traffic_lights.keys())
+        traffic_light_ids = list(self.traffic_lights.keys())
         while True:
-            for green_id in green_cycle:
+            for green_id in traffic_light_ids:
                 while self.priority_event.is_set():
                     logging.debug((f'[Intersection Manager][{self.section_id}] Priority active, pausing auto mode.'))
                     await asyncio.sleep(0)
@@ -222,10 +222,16 @@ if __name__ == '__main__':
     # THIS IS FOR　TESTING **Do not load the world again when the bridge is running.**
     # client.load_world('Town01')
     world_traffic_lights = client.get_world().get_actors().filter('traffic.traffic_light')
-    while not world_traffic_lights:
-        logging.warning('[Intersection Manager] Failed to get the actors from the world, retrying...')
+    max_retries = 5
+    for _ in range(max_retries):
         world_traffic_lights = client.get_world().get_actors().filter('traffic.traffic_light')
-    logging.info('[Intersection Manager] Successfully retrieved the actors from the world.')
+        if world_traffic_lights:
+            break
+        logging.warning('[Intersection Manager] Failed to get the actors from the world, retrying...')
+    else:
+        logging.error('[Intersection Manager] Unable to retrieve traffic lights after multiple attempts. Exiting...')
+        exit(1)
+
     fix_red_light_to_all()
 
     intersections = {}
