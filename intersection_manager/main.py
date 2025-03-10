@@ -1,177 +1,241 @@
-import argparse
+import asyncio
 import json
 import logging
+import os
+import threading
 import time
+from functools import wraps
 
 import carla
 import zenoh
 
-log_level = logging.INFO
-logging.basicConfig(format='%(levelname)s: %(message)s', level=log_level)
-
-traffic_lights = None
-
-# --- Command line argument parsing --- --- --- --- --- ---
-parser = argparse.ArgumentParser(prog='z_queryable', description='zenoh queryable example')
-parser.add_argument('--mode', '-m', dest='mode', choices=['peer', 'client'], type=str, help='The zenoh session mode.')
-parser.add_argument('--connect', '-e', dest='connect', metavar='ENDPOINT', action='append', type=str, help='Endpoints to connect to.')
-parser.add_argument('--listen', '-l', dest='listen', metavar='ENDPOINT', action='append', type=str, help='Endpoints to listen on.')
-parser.add_argument(
-    '--key',
-    '-k',
-    dest='key',
-    default='intersection/**/traffic_light/**',
-    type=str,
-    help='The key expression matching queries to reply to.',
-)
-parser.add_argument('--value', '-v', dest='value', default='ACK', type=str, help='The value to reply to queries.')
-parser.add_argument(
-    '--complete',
-    dest='complete',
-    default=False,
-    action='store_true',
-    help='Declare the queryable as complete w.r.t. the key expression.',
-)
-parser.add_argument('--config', '-c', dest='config', metavar='FILE', type=str, help='A configuration file.')
-parser.add_argument('--host', dest='host', type=str, default='localhost', help='Carla client host connection.')
-parser.add_argument('--port', '-p', dest='port', type=int, default=2000, help='Carla client port number.')
-
-args = parser.parse_args()
-conf = zenoh.Config.from_file(args.config) if args.config is not None else zenoh.Config()
-if args.mode is not None:
-    conf.insert_json5(zenoh.config.MODE_KEY, json.dumps(args.mode))
-if args.connect is not None:
-    conf.insert_json5(zenoh.config.CONNECT_KEY, json.dumps(args.connect))
-if args.listen is not None:
-    conf.insert_json5(zenoh.config.LISTEN_KEY, json.dumps(args.listen))
-key = args.key
-value = args.value
-complete = args.complete
-
-id_to_index = {
-    29855: 33,
-    29777: 34,
-    29861: 35,  # A
-    29783: 18,
-    29903: 19,
-    29789: 20,  # B
-    29795: 16,
-    29819: 17,
-    29825: 13,  # C
-    29867: 30,
-    29741: 31,
-    29873: 32,  # D
-    29927: 10,
-    29747: 11,
-    29831: 12,  # E
-    29879: 27,
-    29801: 28,
-    29885: 29,  # F
-    29921: 7,
-    29807: 8,
-    29837: 9,  # G    
-}
-
-A = [33, 34, 35]
-B = [18, 19, 20]
-C = [13, 16, 17]
-D = [30, 31, 32]
-E = [10, 11, 12]
-F = [27, 28, 29]
-G = [7, 8, 9]
+logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
 
-def set_state(selector, new_state):
-    global traffic_lights
-    id = int(str(selector).split('/')[3])
+def trace(func):
+    if asyncio.iscoroutinefunction(func):
 
-    index = id_to_index[id]
-    # print("index: ", index)
-    iter = enumerate(zip(A, B, C, D, E, F, G))
-    intersection = [A, B, C, D, E, F, G]
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            self = args[0] if args else None
+            section_id = getattr(self, 'section_id', '')
+            prefix = f'[Intersection Manager][{section_id}]' if section_id else '[Traffic Manager]'
+            logging.debug(f'{prefix} Starting async: {func.__name__}')
+            result = await func(*args, **kwargs)
+            logging.debug(f'{prefix} Finished async: {func.__name__}')
+            return result
 
-    idx = 0
-
-    for i, (a, b, c, d, e, f, g) in iter:
-        try:
-            idx = [a, b, c, d, e, f, g].index(index)
-        except Exception as _e:
-            pass
-
-    if new_state == 'green':
-        for i in intersection[idx]:
-            if i != index:
-                traffic_lights[i].set_state(carla.TrafficLightState.Red)
-        traffic_lights[index].set_state(carla.TrafficLightState.Green)
-    elif new_state == 'red':
-        traffic_lights[index].set_state(carla.TrafficLightState.Red)
-
-
-def get_state(selector):
-    global traffic_lights
-
-    id = int(str(selector).split('/')[3])
-
-    index = id_to_index[id]
-
-    state = traffic_lights[int(index)].get_state()
-
-    # logging.info(state)
-
-    return state
-
-
-def queryable_callback(query):
-    global traffic_lights
-
-    # print(f">> [Queryable ] Received Query '{query.selector}'" + (f" with value: {query.value.payload}" if query.value is not None else ""))
-    if query.payload is None:
-        # Get traffic light state
-        state = get_state(query.selector)
-        query.reply(str(query.selector), str(state))
-        
     else:
-        _new_state = query.payload.to_string()
-        # set_state(query.selector, new_state)
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            self = args[0] if args else None
+            section_id = getattr(self, 'section_id', '')
+            prefix = f'[Intersection Manager][{section_id}]' if section_id else '[Traffic Manager]'
+            logging.debug(f'{prefix} Starting sync: {func.__name__}')
+            result = func(*args, **kwargs)
+            logging.debug(f'{prefix} Finished sync: {func.__name__}')
+            return result
+
+    return wrapper
 
 
-def main(args):
-    global traffic_lights
+class Intersection:
+    def __init__(self, section_id, light_mapping):
+        self.section_id = section_id
+        self.light_mapping = light_mapping
+        self.traffic_lights = self._filter_traffic_lights()
+        self.priority_event = threading.Event()
 
-    # create a client in the Carla simulator
-    client = carla.Client(args.host, args.port)
-    client.set_timeout(10.0)
-    # client.get_available_maps()
-    world = client.get_world()
+    def _filter_traffic_lights(self):
+        """Retrieve specific Carla traffic lights based on IDs."""
+        traffic_lights = {}
+        for actor in world_traffic_lights:
+            if actor.id in self.light_mapping.values():
+                traffic_lights[actor.id] = actor
+        for key, carla_item in traffic_lights.items():
+            logging.debug(f'[Intersection Manager] Traffic Light ID {key} is getted.')
+        return traffic_lights
 
-    # Get traffic lights
-    traffic_lights = world.get_actors().filter('traffic.traffic_light')
-    if traffic_lights:
-        logging.info('[intersection manager] Get Carla traffic lights')
+    def _set_traffic_light_state(self, green_id):
+        """Set traffic light states: one green, others red."""
+        for id, traffic_light in self.traffic_lights.items():
+            if id == green_id:
+                traffic_light.set_state(carla.TrafficLightState.Green)
+                logging.debug(f'[Intersection Manager][{self.section_id}] Traffic light {id} set to GREEN')
+            else:
+                traffic_light.set_state(carla.TrafficLightState.Red)
+                logging.debug(f'[Intersection Manager][{self.section_id}] Traffic light {id} set to RED')
 
-    # Set default Carla traffic lights' status
-    for i in range(1, 36):
-        traffic_lights[i].set_red_time(1000.0)
-        traffic_lights[i].set_green_time(5.0)
-        traffic_lights[i].set_yellow_time(0.0)
-        traffic_lights[i].set_state(carla.TrafficLightState.Red)
-
-    # initiate logging
-    zenoh.try_init_log_from_env()
-
-    logging.info("Opening session...")
-    with zenoh.open(conf) as session:
-        logging.info("Declaring Queryable on '{}'...".format(key))
-        session.declare_queryable(key, queryable_callback, complete=complete)
-
-        logging.info("Press CTRL-C to quit...")
+    @trace
+    async def auto_changing_state(self):
+        """Automatically change signals periodically for Intersection."""
+        traffic_light_ids = list(self.traffic_lights.keys())
         while True:
-            try:
-                time.sleep(1)
-            except Exception as err:
-                logging.info(err, flush=True)
-                raise
+            for green_id in traffic_light_ids:
+                while self.priority_event.is_set():
+                    logging.debug((f'[Intersection Manager][{self.section_id}] Priority active, pausing auto mode.'))
+                    await asyncio.sleep(0)
+
+                logging.debug(f'[Intersection Manager][{self.section_id}] Under auto mode.')
+                self._set_traffic_light_state(green_id)
+                await asyncio.sleep(5)
+
+    @trace
+    def get_state(self, autoware_tl):
+        carla_tl = self.light_mapping[autoware_tl]
+        return self.traffic_lights[carla_tl].get_state()
+
+    @trace
+    def handle_priority(self, autoware_tl, duration):
+        self.priority_event.set()
+        logging.info(f'[Intersection Manager][{self.section_id}] Priority active, priority event is set.')
+        carla_tl = self.light_mapping[autoware_tl]
+        for id, traffic_light in self.traffic_lights.items():
+            if id != carla_tl:
+                traffic_light.set_state(carla.TrafficLightState.Red)
+        time.sleep(1)
+        self.traffic_lights[carla_tl].set_state(carla.TrafficLightState.Green)
+        time.sleep(duration)
+
+        self.priority_event.clear()
+        logging.info(f'[Intersection Manager][{self.section_id}] Back to auto mode.')
+
+
+def load_map_info(file_path):
+    with open(file_path, 'r') as f:
+        map_info = json.load(f)
+    autoware_to_carla_tl = {}
+    for section_id, lanes in map_info['intersections'].items():
+        autoware_to_carla_tl[section_id] = {int(lane['autoware_traffic_light']): int(lane['carla_traffic_light']) for lane in lanes}
+    return autoware_to_carla_tl
+
+
+@trace
+async def normal_operation():
+    tasks = []
+    for intersection in intersections.values():
+        tasks.append(intersection.auto_changing_state())
+    await asyncio.gather(*tasks)
+
+
+@trace
+async def start_queryable():
+    # initiate logging
+    zenoh.init_log_from_env_or('error')
+
+    logging.info('[Intersection Manager] Opening session...')
+
+    with zenoh.open(zenoh.Config()) as session:
+        queryable_key = 'intersection/**/traffic_light/**'
+
+        @trace
+        def queryable_callback(query):
+            if query.payload is not None:
+                logging.info(
+                    f"[Intersection Manager][Queryable ] Received Query '{query.selector}'" + (f' with payload: {query.payload.to_string()}')
+                )
+            else:
+                logging.debug(f"[Intersection Manager][Queryable ] Received Query '{query.selector}'with no payload")
+            selector_part = str(query.selector).split('/')
+            section = selector_part[1]
+            autoware_tl = int(selector_part[3])
+            if query.payload is not None:
+                query.reply(str(query.selector), str(query.payload))
+                payload = eval(query.payload.to_string())
+                # For debugging
+                try:
+                    tl_state = payload['state']
+                    if tl_state != 'Green':
+                        raise Exception("state to set is not 'Green'")
+                    duration = int(payload['duration'])
+
+                    t = threading.Thread(
+                        target=intersections[section].handle_priority,
+                        args=(
+                            autoware_tl,
+                            duration,
+                        ),
+                    )
+                    t.start()
+
+                except Exception as err:
+                    print(err, flush=True)
+                    raise
+            else:
+                state = intersections[section].get_state(autoware_tl)
+                query.reply(str(query.selector), str(state))
+
+        logging.info(f"[Intersection Manager] Declaring Queryable on '{queryable_key}'...")
+        session.declare_queryable(queryable_key, queryable_callback)
+
+        while True:
+            await asyncio.sleep(0)
+
+
+async def main():
+    await asyncio.gather(*[normal_operation(), start_queryable()])
+
+
+def fix_red_light_to_all():
+    for traffic_light in world_traffic_lights:
+        traffic_light.set_state(carla.TrafficLightState.Red)
+        traffic_light.freeze(True)
 
 
 if __name__ == '__main__':
-    main(args)
+    import argparse
+
+    parser = argparse.ArgumentParser(prog='intersection_manager')
+
+    parser.add_argument(
+        '--host',
+        dest='carla_host',
+        type=str,
+        default='localhost',
+        help='Carla simulation host.',
+    )
+    parser.add_argument(
+        '--port',
+        '-p',
+        dest='carla_port',
+        type=int,
+        default=2000,
+        help='Carla simulation port number.',
+    )
+
+    default_config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../map_info.json')
+    parser.add_argument(
+        '--map-info',
+        dest='map_info',
+        type=str,
+        default=default_config_path,
+        help='Path to the map information file.',
+    )
+
+    args = parser.parse_args()
+
+    map_info = load_map_info(args.map_info)
+
+    client = carla.Client(args.carla_host, args.carla_port)
+    client.set_timeout(10.0)  # seconds
+    # THIS IS FOR　TESTING **Do not load the world again when the bridge is running.**
+    # client.load_world('Town01')
+    world_traffic_lights = client.get_world().get_actors().filter('traffic.traffic_light')
+    max_retries = 5
+    for _ in range(max_retries):
+        world_traffic_lights = client.get_world().get_actors().filter('traffic.traffic_light')
+        if world_traffic_lights:
+            break
+        logging.warning('[Intersection Manager] Failed to get the actors from the world, retrying...')
+    else:
+        logging.error('[Intersection Manager] Unable to retrieve traffic lights after multiple attempts. Exiting...')
+        exit(1)
+
+    fix_red_light_to_all()
+
+    intersections = {}
+    for section_id, light_mapping in map_info.items():
+        intersections[section_id] = Intersection(section_id, light_mapping)
+
+    asyncio.run(main())
