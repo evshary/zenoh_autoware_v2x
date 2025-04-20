@@ -134,7 +134,7 @@ light_id = [
     29837
 ]
 
-
+# TODO: Please avoid using global variables here, as they may cause conflicts in multi-vehicle scenarios.
 # Init. global variables about Pose
 pos_lane_id = 0
 pos_x = 0.0

@@ -2,8 +2,7 @@ import asyncio
 import json
 import logging
 import os
-import threading
-import time
+import queue
 from functools import wraps
 
 import carla
@@ -19,7 +18,7 @@ def trace(func):
         async def wrapper(*args, **kwargs):
             self = args[0] if args else None
             section_id = getattr(self, 'section_id', '')
-            prefix = f'[Intersection Manager][{section_id}]' if section_id else '[Traffic Manager]'
+            prefix = f'[Intersection Manager][{section_id}]' if section_id else '[Intersection Manager]'
             logging.debug(f'{prefix} Starting async: {func.__name__}')
             result = await func(*args, **kwargs)
             logging.debug(f'{prefix} Finished async: {func.__name__}')
@@ -31,7 +30,7 @@ def trace(func):
         def wrapper(*args, **kwargs):
             self = args[0] if args else None
             section_id = getattr(self, 'section_id', '')
-            prefix = f'[Intersection Manager][{section_id}]' if section_id else '[Traffic Manager]'
+            prefix = f'[Intersection Manager][{section_id}]' if section_id else '[Intersection Manager]'
             logging.debug(f'{prefix} Starting sync: {func.__name__}')
             result = func(*args, **kwargs)
             logging.debug(f'{prefix} Finished sync: {func.__name__}')
@@ -45,7 +44,8 @@ class Intersection:
         self.section_id = section_id
         self.light_mapping = light_mapping
         self.traffic_lights = self._filter_traffic_lights()
-        self.priority_event = threading.Event()
+        # self.priority_event = threading.Event()
+        self.priority_event = asyncio.Event()
 
     def _filter_traffic_lights(self):
         """Retrieve specific Carla traffic lights based on IDs."""
@@ -87,19 +87,23 @@ class Intersection:
         return self.traffic_lights[carla_tl].get_state()
 
     @trace
-    def handle_priority(self, autoware_tl, duration):
+    async def handle_priority(self, autoware_tl, duration):
         self.priority_event.set()
         logging.info(f'[Intersection Manager][{self.section_id}] Priority active, priority event is set.')
         carla_tl = self.light_mapping[autoware_tl]
         for id, traffic_light in self.traffic_lights.items():
             if id != carla_tl:
                 traffic_light.set_state(carla.TrafficLightState.Red)
-        time.sleep(1)
+        await asyncio.sleep(1)
         self.traffic_lights[carla_tl].set_state(carla.TrafficLightState.Green)
-        time.sleep(duration)
+        if duration != 0:
+            await asyncio.sleep(duration)
+            self.priority_event.clear()
 
-        self.priority_event.clear()
+    def event_clear(self):
+        logging.debug(f'[Intersection Manager][{self.section_id}] Priority event clear.')
         logging.info(f'[Intersection Manager][{self.section_id}] Back to auto mode.')
+        self.priority_event.clear()
 
 
 def load_map_info(file_path):
@@ -112,6 +116,21 @@ def load_map_info(file_path):
 
 
 @trace
+async def event_handler(event_queue):
+    while True:
+        while not event_queue.empty():
+            event = event_queue.get()
+            (section, tl_state, autoware_tl, duration) = event
+            if tl_state == 'Green':
+                asyncio.create_task(intersections[section].handle_priority(autoware_tl, duration))
+            elif tl_state == 'Unfreeze':
+                intersections[section].event_clear()
+            else:
+                raise Exception("The state to set is unrecognizable.'")
+        await asyncio.sleep(0)
+
+
+@trace
 async def normal_operation():
     tasks = []
     for intersection in intersections.values():
@@ -120,7 +139,7 @@ async def normal_operation():
 
 
 @trace
-async def start_queryable():
+async def start_queryable(event_queue):
     # initiate logging
     zenoh.init_log_from_env_or('error')
 
@@ -131,6 +150,7 @@ async def start_queryable():
 
         @trace
         def queryable_callback(query):
+            nonlocal event_queue
             if query.payload is not None:
                 logging.info(
                     f"[Intersection Manager][Queryable ] Received Query '{query.selector}'" + (f' with payload: {query.payload.to_string()}')
@@ -146,21 +166,11 @@ async def start_queryable():
                 # For debugging
                 try:
                     tl_state = payload['state']
-                    if tl_state != 'Green':
-                        raise Exception("state to set is not 'Green'")
                     duration = int(payload['duration'])
 
-                    t = threading.Thread(
-                        target=intersections[section].handle_priority,
-                        args=(
-                            autoware_tl,
-                            duration,
-                        ),
-                    )
-                    t.start()
+                    event_queue.put((section, tl_state, autoware_tl, duration))
 
-                except Exception as err:
-                    print(err, flush=True)
+                except Exception as _:
                     raise
             else:
                 state = intersections[section].get_state(autoware_tl)
@@ -174,7 +184,8 @@ async def start_queryable():
 
 
 async def main():
-    await asyncio.gather(*[normal_operation(), start_queryable()])
+    event_queue = queue.Queue()
+    await asyncio.gather(*[normal_operation(), start_queryable(event_queue), event_handler(event_queue)])
 
 
 def fix_red_light_to_all():
