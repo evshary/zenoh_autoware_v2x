@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import queue
+from enum import Enum
 from functools import wraps
 
 import zenoh
@@ -40,6 +41,12 @@ def trace(func):
     return wrapper
 
 
+class TrafficLightControl(Enum):
+    FREEZE_GREEN = 0
+    FREEZE_RED = 1
+    UNFREEZE = 2
+
+
 class Intersection:
     def __init__(self, section_id, lane_info):
         self.section_id = section_id
@@ -48,8 +55,12 @@ class Intersection:
 
         # key=lane_id, value=vehicle heap
         self.request_queue = {lane_id: [] for lane_id in lane_info.keys()}
-        self.vehicle_map = {}
-        self.vehicle_push = {}
+        self.lane_last_vehicle = {
+            lane_id: -1 for lane_id in lane_info.keys()
+        }  # The record of the last car in each lane that has been added to the request_queue.
+        self.distance_record = {}
+        self.vehicle_push = {}  # The record has been added to the request queue for the vehicle
+        self.last_pass = -1
 
     @trace
     def _decide_priority_lane(self, tx):
@@ -62,9 +73,10 @@ class Intersection:
             self.vehicle_passing = True
             highest_priority = min(_top_list, key=lambda x: x[0])
             (_, specified_lane, specified_tl) = highest_priority
+
             # duration = (len(self.request_queue[specified_lane])-1)*3+5
-            duration = 15
-            tx.put((self.section_id, specified_tl, duration))
+            tx.put((self.section_id, specified_tl, TrafficLightControl.FREEZE_GREEN, 0))
+            self.last_pass = self.lane_last_vehicle[specified_lane]
 
     @trace
     def _distance_measure(self, vehicle_id, vehicle_pos, lane_id):
@@ -73,10 +85,17 @@ class Intersection:
         (x2, y2) = light_info.get('light_pos')
         light_id = light_info.get('light_id')
         distance = math.hypot(x1 - x2, y1 - y2)
-        if distance <= 15:
-            self.vehicle_push[vehicle_id] = True
-            heapq.heappush(self.request_queue[lane_id], (vehicle_id, lane_id, light_id))
-            logging.debug(f"[Traffic Manager] Vehicle {vehicle_id} added to lane {lane_id}'s heap with distance {distance}")
+        if distance <= 10:
+            pre_distance = self.distance_record.get(vehicle_id)
+            if pre_distance is not None:
+                if pre_distance > distance:
+                    del self.distance_record[vehicle_id]
+                    self.vehicle_push[vehicle_id] = (lane_id, light_id)
+                    self.lane_last_vehicle[lane_id] = vehicle_id
+                    heapq.heappush(self.request_queue[lane_id], (vehicle_id, lane_id, light_id))
+                    logging.debug(f"[Traffic Manager] Vehicle {vehicle_id} added to lane {lane_id}'s heap with distance {distance}")
+            else:
+                self.distance_record[vehicle_id] = distance
 
     @trace
     async def monitor_request_queue(self, tx):
@@ -96,25 +115,27 @@ class Intersection:
     @trace
     def handle_query(self, vehicle_info):
         (vehicle_id, vehicle_pos, lane_id) = vehicle_info
-        self.vehicle_map[vehicle_id] = lane_id
         if self.vehicle_push.get(vehicle_id):
             return
         self._distance_measure(vehicle_id, vehicle_pos, lane_id)
 
     @trace
-    def change_state(self, vehicle_id):
+    def change_state(self, vehicle_id, tx):
         # maintain leaving vehicles
         try:
-            lane_id = self.vehicle_map[vehicle_id]
-            del self.vehicle_map[vehicle_id]
+            (lane_id, specified_tl) = self.vehicle_push[vehicle_id]
             del self.vehicle_push[vehicle_id]
-            for idx, (v_id, _) in enumerate(self.self.request_queue[lane_id]):
+            del self.distance_record[vehicle_id]
+            for idx, (v_id, _) in enumerate(self.request_queue[lane_id]):
                 if v_id == vehicle_id:
                     self.request_queue[lane_id][idx] = self.request_queue[lane_id][-1]
                     self.request_queue[lane_id].pop()
                     heapq.heapify(self.request_queue[lane_id])
+            if vehicle_id == self.last_pass:
+                logging.info(f"Vehicle [{vehicle_id}], last in lane [{lane_id}]'s previous queue, has passed intersection [{self.section_id}].")
+                tx.put((self.section_id, specified_tl, TrafficLightControl.UNFREEZE, 0))
+                self.vehicle_passing = False
 
-            self.vehicle_passing = False
         except Exception as _:
             pass
 
@@ -145,20 +166,30 @@ async def _send_decision(session, tx):
     while True:
         while not tx.empty():
             result = tx.get()
-            (section, traffic_light, duration) = result
+            (section, traffic_light, command, delay) = result
             get_key = f'intersection/{section}/traffic_light/{traffic_light}/state'
-            payload = {'state': 'Green', 'duration': str(duration)}
+            payload = None
+            if command == TrafficLightControl.FREEZE_GREEN:
+                payload = {'state': 'Green', 'duration': str(delay)}
+            elif command == TrafficLightControl.UNFREEZE:
+                payload = {'state': 'Unfreeze', 'duration': str(delay)}
             logging.info(f"[Traffic Manager] Sending Query '{get_key}'...payload: '{payload}'...")
-            _ = session.get(get_key, payload=str(payload), timeout=5.0)
+            replies = session.get(get_key, payload=str(payload), timeout=5.0)
+            for reply in replies:
+                try:
+                    logging.debug(f">> Received ('{reply.ok.key_expr}': '{reply.ok.payload.to_string()}')")
+                except Exception as e:
+                    logging.error(f">> Received (ERROR: '{reply.err.payload.to_string()}') - {e}")
         await asyncio.sleep(0)
 
 
 @trace
-async def subscriber(session):
+async def subscriber(session, tx):
     vehicle_trace = {}
 
     @trace
     def listener(sample: zenoh.Sample):
+        nonlocal vehicle_trace
         payload = json.loads(sample.payload.to_string())
         lane_id = int(payload.get('lane_id'))
         position = payload.get('position')
@@ -173,7 +204,7 @@ async def subscriber(session):
             if vehicle_trace.get(vehicle_id) is not None:
                 prev_section = vehicle_trace.get(vehicle_id)
                 if prev_section != curr_section:
-                    intersections.get(prev_section).change_state(vehicle_id)
+                    intersections.get(prev_section).change_state(vehicle_id, tx)
             vehicle_trace[vehicle_id] = curr_section
             intersections.get(curr_section).handle_query(vehicle_info)
 
@@ -186,8 +217,7 @@ async def subscriber(session):
 
 
 @trace
-async def decision_making(session):
-    tx = queue.Queue()
+async def decision_making(session, tx):
     tasks = []
     for intersection in intersections.values():
         tasks.append(intersection.monitor_request_queue(tx))
@@ -200,7 +230,8 @@ async def start_sub_and_decision_making():
     zenoh.init_log_from_env_or('error')
     logging.info('[Traffic Manager] Opening session...')
     with zenoh.open(zenoh.Config()) as session:
-        await asyncio.gather(*[subscriber(session), decision_making(session)])
+        tx = queue.Queue()
+        await asyncio.gather(*[subscriber(session, tx), decision_making(session, tx)])
 
 
 if __name__ == '__main__':
