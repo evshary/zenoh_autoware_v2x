@@ -77,6 +77,7 @@ class Intersection:
             # duration = (len(self.request_queue[specified_lane])-1)*3+5
             tx.put((self.section_id, specified_tl, TrafficLightControl.FREEZE_GREEN, 0))
             self.last_pass = self.lane_last_vehicle[specified_lane]
+            logging.debug(f"[Traffic Manager] Last vehicle being processed on the prioritized lane: {self.last_pass}")
 
     @trace
     def _distance_measure(self, vehicle_id, vehicle_pos, lane_id):
@@ -85,7 +86,7 @@ class Intersection:
         (x2, y2) = light_info.get('light_pos')
         light_id = light_info.get('light_id')
         distance = math.hypot(x1 - x2, y1 - y2)
-        if distance <= 10:
+        if distance <= 15:
             pre_distance = self.distance_record.get(vehicle_id)
             if pre_distance is not None:
                 if pre_distance > distance:
@@ -123,10 +124,14 @@ class Intersection:
     def change_state(self, vehicle_id, tx):
         # maintain leaving vehicles
         try:
-            (lane_id, specified_tl) = self.vehicle_push[vehicle_id]
-            del self.vehicle_push[vehicle_id]
-            del self.distance_record[vehicle_id]
-            for idx, (v_id, _) in enumerate(self.request_queue[lane_id]):
+            processing_vehicle = self.vehicle_push.get(vehicle_id)
+            if processing_vehicle is None:
+                logging.debug(f"No ongoing vehicle with ID {vehicle_id} found at intersection {self.section_id}.")
+                return
+            lane_id, specified_tl = processing_vehicle
+            self.vehicle_push.pop(vehicle_id, None)
+            self.distance_record.pop(vehicle_id, None)
+            for idx, (v_id, _, _) in enumerate(self.request_queue[lane_id]):
                 if v_id == vehicle_id:
                     self.request_queue[lane_id][idx] = self.request_queue[lane_id][-1]
                     self.request_queue[lane_id].pop()
@@ -137,7 +142,7 @@ class Intersection:
                 self.vehicle_passing = False
 
         except Exception as _:
-            pass
+            logging.error("error happen", exc_info=True)
 
 
 def load_map_info(file_path):
@@ -196,9 +201,7 @@ async def subscriber(session, tx):
         pos_x = float(position.get('x'))
         pos_y = float(position.get('y'))
         vehicle_id = int(str(sample.key_expr).rsplit('/v')[-1])
-
         vehicle_info = (vehicle_id, (pos_x, pos_y), lane_id)
-
         curr_section = lane_to_intersection.get(lane_id)
         if curr_section is not None:
             if vehicle_trace.get(vehicle_id) is not None:
