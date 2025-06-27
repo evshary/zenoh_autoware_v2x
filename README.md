@@ -76,7 +76,7 @@ colcon build --symlink-install
 # Run zenoh_carla_bridge, Python Agent and V2X module
 cd autoware_carla_launch
 source env.sh
-./script/run-bridge-v2x.sh
+./script/bridge_ros2dds/run-bridge-v2x.sh
 ```
 
 - In Autoware container
@@ -85,7 +85,7 @@ source env.sh
 # Run zenoh-bridge-ros2dds and Autoware
 cd autoware_carla_launch
 source env.sh
-./script/run-autoware.sh
+./script/autoware_ros2dds/run-autoware.sh
 
 # Open another window in the Autoware container to execute the commands below.
 source external/zenoh_autoware_v2x/install/setup.bash
