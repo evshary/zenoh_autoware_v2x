@@ -41,9 +41,9 @@ sequenceDiagram
 
     alt High-priority vehicle passes through the intersection
         tm ->> im: Restore original traffic light signals
-        
+
             im ->> im: Resume automatic signal change for affected intersection
-        
+
     end
 
     Note over tm, im: Handle emergency vehicles, normal vehicles follow standard traffic lights

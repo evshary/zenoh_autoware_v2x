@@ -106,7 +106,7 @@ lane_id = [
     26284,  # F
     25202,
     22355,
-    24667
+    24667,
 ]
 
 
@@ -131,7 +131,7 @@ light_id = [
     29885,  # F
     29921,
     29807,
-    29837
+    29837,
 ]
 
 # TODO: Please avoid using global variables here, as they may cause conflicts in multi-vehicle scenarios.
@@ -153,29 +153,35 @@ class SignalPub(Node):
             history=1,  # RMW_QOS_POLICY_HISTORY_KEEP_LAST
             depth=1,
         )
-        self.publication = self.create_publisher(TrafficLightGroupArray, '/perception/traffic_light_recognition/traffic_signals',
-                                                 qos_profile=qos_profile,)
+        self.publication = self.create_publisher(
+            TrafficLightGroupArray,
+            '/perception/traffic_light_recognition/traffic_signals',
+            qos_profile=qos_profile,
+        )
         self.subscription = self.create_subscription(
             PathWithLaneId,
             'planning/scenario_planning/lane_driving/behavior_planning/path_with_lane_id',
             self.signal_callback,
             qos_profile=qos_profile,
         )
-        self.pose_subscription = self.create_subscription(VehicleKinematics, '/api/vehicle/kinematics', self.pose_callback, QoSProfile(
-            reliability=2,  # RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT
-            history=1,  # RMW_QOS_POLICY_HISTORY_KEEP_LAST
-            depth=1,
-        ))
+        self.pose_subscription = self.create_subscription(
+            VehicleKinematics,
+            '/api/vehicle/kinematics',
+            self.pose_callback,
+            QoSProfile(
+                reliability=2,  # RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT
+                history=1,  # RMW_QOS_POLICY_HISTORY_KEEP_LAST
+                depth=1,
+            ),
+        )
 
         self.pose_publisher = session.declare_publisher(f'vehicle/pose/{args.vehicle}', reliability=Reliability.RELIABLE)
         self.publish_red_signal()
-
 
     def publish_red_signal(self):
         global light_id
 
         self.publish_traffic_light_to_autoware(light_id, Color.RED.value)
-
 
     def publish_pose(self):
         global pos_x, pos_y, pos_z, pos_lane_id
@@ -183,7 +189,6 @@ class SignalPub(Node):
         pose = {'lane_id': pos_lane_id, 'position': {'x': pos_x, 'y': pos_y, 'z': pos_z}}
 
         self.pose_publisher.put(json.dumps(pose))
-
 
     def pose_callback(self, data):
         global pos_x, pos_y, pos_z
@@ -194,7 +199,6 @@ class SignalPub(Node):
         pos_z = position.z
 
         self.publish_pose()
-
 
     def signal_callback(self, data):
         global color_dict, light_id, lane_id
@@ -210,17 +214,16 @@ class SignalPub(Node):
                     idx = lane_id.index(d.lane_ids[0])
                     tl_id = light_id[idx]
 
-                     # Sync Autoware and Carla's traffic light signal
+                    # Sync Autoware and Carla's traffic light signal
                     selector, target, color = self.query_light_status(tl_id)
-                    self.publish_traffic_light_to_autoware(tl_id, color_dict.get(color,1))
-                   
+                    self.publish_traffic_light_to_autoware(tl_id, color_dict.get(color, 1))
+
                     self.publish_pose()
                     break
             else:
                 pass
 
-
-    def publish_traffic_light_to_autoware(self, tl_list:list, color:int):
+    def publish_traffic_light_to_autoware(self, tl_list: list, color: int):
         global light_id
         traffic_light_group_array = TrafficLightGroupArray()
         traffic_light_group_array.stamp = self.get_clock().now().to_msg()
@@ -235,10 +238,9 @@ class SignalPub(Node):
             element.confidence = 1.0
             traffic_light_group.elements.append(element)
             traffic_light_group_array.traffic_light_groups.append(traffic_light_group)
-        
+
         self.publication.publish(traffic_light_group_array)
         # TODO: Use the query_light_status function here to set Carla's traffic lights.
-
 
     def query_light_status(self, tl_id):
         # Match intersection ID and traffic light ID
@@ -275,14 +277,13 @@ class SignalPub(Node):
         }.get('BEST_MATCHING')
         payload = None
         replies = session.get(selector, target=target, payload=None)
-        
 
         for reply in replies:
-                try:    
-                    payload = reply.ok.payload.to_string()
-                except Exception as _e:
-                    payload = reply.err.payload.to_string()
- 
+            try:
+                payload = reply.ok.payload.to_string()
+            except Exception as _e:
+                payload = reply.err.payload.to_string()
+
         return selector, target, payload
 
 
