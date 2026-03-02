@@ -77,7 +77,7 @@ class Intersection:
             # duration = (len(self.request_queue[specified_lane])-1)*3+5
             tx.put((self.section_id, specified_tl, TrafficLightControl.FREEZE_GREEN, 0))
             self.last_pass = self.lane_last_vehicle[specified_lane]
-            logging.debug(f"[Traffic Manager] Last vehicle being processed on the prioritized lane: {self.last_pass}")
+            logging.debug(f'[Traffic Manager] Last vehicle being processed on the prioritized lane: {self.last_pass}')
 
     @trace
     def _distance_measure(self, vehicle_id, vehicle_pos, lane_id):
@@ -126,7 +126,7 @@ class Intersection:
         try:
             processing_vehicle = self.vehicle_push.get(vehicle_id)
             if processing_vehicle is None:
-                logging.debug(f"No ongoing vehicle with ID {vehicle_id} found at intersection {self.section_id}.")
+                logging.debug(f'No ongoing vehicle with ID {vehicle_id} found at intersection {self.section_id}.')
                 return
             lane_id, specified_tl = processing_vehicle
             self.vehicle_push.pop(vehicle_id, None)
@@ -142,7 +142,7 @@ class Intersection:
                 self.vehicle_passing = False
 
         except Exception as _:
-            logging.error("error happen", exc_info=True)
+            logging.error('error happen', exc_info=True)
 
 
 def load_map_info(file_path):
