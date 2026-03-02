@@ -6,10 +6,10 @@ authors = ["RogerJung <engineer54rj@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.12"
 pygame = "^2.1.2"
-carla = "0.9.14"
-numpy = "^1.24.1"
+carla = "0.9.16"
+numpy = "^1.26"
 eclipse-zenoh = "1.0.2"
 
 [build-system]
