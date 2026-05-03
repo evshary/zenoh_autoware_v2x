@@ -102,9 +102,9 @@ The `map_info.json` file defines the mapping between intersections and traffic l
 - Each intersection includes traffic lights that influence each other’s traffic flow, meaning that simultaneous green lights could create conflicts.
   - **`autoware_lane`**: Corresponding lane ID in Autoware.
   - **`autoware_traffic_light`**: Traffic light ID in Autoware.
-  - **`carla_traffic_light`**: Traffic light ID in the CARLA simulator.
   - **`traffic_light_position`**:
     - The traffic light's position in Autoware's coordinate system (`x, y`).
+    - The Intersection Manager matches each entry to the nearest CARLA traffic light actor by this position at startup.
     - **Coordinate system transformation**:
       - The x-axis in Autoware and CARLA are the same.
       - The y-axis in Autoware is the inverse of CARLA’s y-axis (`Autoware_y = -CARLA_y`).
@@ -116,12 +116,9 @@ The `map_info.json` file defines the mapping between intersections and traffic l
   - The `lanelet2_map.osm` file can be imported into [Tier IV Vector Map Builder](https://tools.tier4.jp/feature/vector_map_builder_ll2/) to obtain lane IDs and traffic light IDs.
   - In **Autoware version 20240903**, traffic light IDs can also be identified from the RViz-rendered map.
 
-- **`carla_traffic_light`**:
-  - Can be retrieved using the CARLA API which will return a list of traffic light actors.
-
 - **`traffic_light_position`**:
   - The position of traffic lights can be obtained using the CARLA API.
-    The Carla coordinate y-axis value should be negated to match Autoware’s coordinate system.
+    The CARLA coordinate y-axis value should be negated to match Autoware’s coordinate system.
   - Alternatively, positions can also be extracted from the `lanelet2_map.osm` file.
 
 The `map_info.json` file is loaded during the initialization of the **Traffic Manager** and **Intersection Manager**.

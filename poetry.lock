@@ -18,21 +18,25 @@ files = [
 
 [[package]]
 name = "eclipse-zenoh"
-version = "1.0.2"
-description = "The python API for Eclipse zenoh"
+version = "1.8.0"
+description = "The Zenoh Python API"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "eclipse_zenoh-1.0.2-cp38-abi3-linux_armv6l.whl", hash = "sha256:86eb01b0df57d4532f8f045f464f4277bdc54bf7e318b5a1f15c1432f3bd8279"},
-    {file = "eclipse_zenoh-1.0.2-cp38-abi3-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:652f904badc6904a1000e45b3f73932efb098538934f5bdff89348e7b41a51a1"},
-    {file = "eclipse_zenoh-1.0.2-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:cb57ebcf27f4a599972d7060f35545d65bd5c8372aa05e18cc0b2f2e573564cf"},
-    {file = "eclipse_zenoh-1.0.2-cp38-abi3-manylinux_2_12_i686.manylinux2010_i686.whl", hash = "sha256:e5d21185ab86b3cb9dcbe177d2f55654434f3eca6227db0afad5e5e3405867df"},
-    {file = "eclipse_zenoh-1.0.2-cp38-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:187c9dc1713c22607de21afe1f0e9fdd49890ef5ebd1e9d941f3af7f000f375d"},
-    {file = "eclipse_zenoh-1.0.2-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:cf0bd52390c35f7fd1d9ccba44094d8a8341c72910cb4f01e55209bd3d75b0e1"},
-    {file = "eclipse_zenoh-1.0.2-cp38-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:971496374df46fe34eb38dca080ca05022b7c459c3e59af2629b570438e170ec"},
-    {file = "eclipse_zenoh-1.0.2-cp38-abi3-win_amd64.whl", hash = "sha256:07aa7e1a2c584ac0d362d69938e374de28fd4e6766a0f23999899a2976a00df0"},
-    {file = "eclipse_zenoh-1.0.2.tar.gz", hash = "sha256:796cd2d0b5ef727351f486d802ca6d313346095cc40f28dc6cd3a924e24a09f5"},
+    {file = "eclipse_zenoh-1.8.0-cp38-cp38-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:07fa53f31e53a60136cdaf78a831a812d8b442790d1bb3900cf50b660f157208"},
+    {file = "eclipse_zenoh-1.8.0-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3293189039f5ba013881bca2102277a12988d7fbd9755eb15d8844fdca120355"},
+    {file = "eclipse_zenoh-1.8.0-cp39-abi3-linux_armv6l.whl", hash = "sha256:b09657978c22e75ccc52a245665c88caea98948e7d961c0e57567d405001f716"},
+    {file = "eclipse_zenoh-1.8.0-cp39-abi3-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:54297b9bb519974aaf318a5fef0f35101730143e53b334464b1c1cf536ec2080"},
+    {file = "eclipse_zenoh-1.8.0-cp39-abi3-macosx_10_12_x86_64.whl", hash = "sha256:4d1a12246d592ee86accf58d35967e12a35f2efca85b46dee90fc61831ce0d4e"},
+    {file = "eclipse_zenoh-1.8.0-cp39-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:ca624399b154a52fad3c466e91f02af018b002adb6f19e8b00abc1c0c94209d8"},
+    {file = "eclipse_zenoh-1.8.0-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:1aca875fd5aa38284cf7161964241a73b4e4090a48385c35a6d8e6169cc8e88a"},
+    {file = "eclipse_zenoh-1.8.0-cp39-abi3-win_amd64.whl", hash = "sha256:2eb1778bff7b92b8af2cc6ee0c5ac14fa0f84019e3dafc593cdd44f003fb5aac"},
+    {file = "eclipse_zenoh-1.8.0-pp310-pypy310_pp73-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:6c98ae7097b4cd5239176342c8d922e78c2715d8d49d77f4a559f20921e5eff3"},
+    {file = "eclipse_zenoh-1.8.0-pp310-pypy310_pp73-manylinux_2_28_aarch64.whl", hash = "sha256:ea36a793091d987d5da3106ec835a696fdd3431488f4eec9812e660b1fcfe0e8"},
+    {file = "eclipse_zenoh-1.8.0-pp39-pypy39_pp73-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:d688c9a4712f17ffb4bef2a1bea0c7dba838a62876054900662bd13dae9c455d"},
+    {file = "eclipse_zenoh-1.8.0-pp39-pypy39_pp73-manylinux_2_28_aarch64.whl", hash = "sha256:aba37e2447785aa822ca07096e577bac8a5afad5738a3bc20710d4015360adfa"},
+    {file = "eclipse_zenoh-1.8.0.tar.gz", hash = "sha256:1cb0b8abdc522d58497c0cd7b8c8e7791f39d2c189c5e0bc80da8840af0ce24d"},
 ]
 
 [[package]]
@@ -154,4 +158,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "cb8c66dec2e7708f282e15d6253688ffd03bef406c09facf8f8a2795687a795f"
+content-hash = "73d3471c839b5424916521a6bd76f2c7869cdf2cbd9187fb7dcfe4045978fb52"
