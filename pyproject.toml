@@ -10,7 +10,7 @@ python = "^3.12"
 pygame = "^2.1.2"
 carla = "0.9.16"
 numpy = "^1.26"
-eclipse-zenoh = "1.0.2"
+eclipse-zenoh = "1.8.0"
 
 [build-system]
 requires = ["poetry-core"]

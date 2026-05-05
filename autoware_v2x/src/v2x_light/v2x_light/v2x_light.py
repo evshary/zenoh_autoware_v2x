@@ -6,10 +6,10 @@ from enum import Enum
 import rclpy
 import zenoh
 from autoware_adapi_v1_msgs.msg import VehicleKinematics
+from autoware_internal_planning_msgs.msg import PathWithLaneId
 from autoware_perception_msgs.msg import TrafficLightElement, TrafficLightGroup, TrafficLightGroupArray
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
-from tier4_planning_msgs.msg import PathWithLaneId
 from zenoh import Config, QueryTarget, Reliability
 
 """

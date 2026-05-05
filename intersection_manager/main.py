@@ -10,6 +10,9 @@ import zenoh
 
 logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
+# Max distance (meters) between a map_info.json position and a CARLA traffic light actor.
+TRAFFIC_LIGHT_MATCH_THRESHOLD_M = 5.0
+
 
 def trace(func):
     if asyncio.iscoroutinefunction(func):
@@ -40,32 +43,48 @@ def trace(func):
 
 
 class Intersection:
-    def __init__(self, section_id, light_mapping):
+    def __init__(self, section_id, light_positions):
         self.section_id = section_id
-        self.light_mapping = light_mapping
-        self.traffic_lights = self._filter_traffic_lights()
+        # {autoware_tl: (carla_x, carla_y)} — CARLA-frame positions
+        self.light_positions = light_positions
+        self.traffic_lights = self._match_traffic_lights()
         # self.priority_event = threading.Event()
         self.priority_event = asyncio.Event()
 
-    def _filter_traffic_lights(self):
-        """Retrieve specific Carla traffic lights based on IDs."""
+    def _match_traffic_lights(self):
+        """Resolve each autoware traffic light to the nearest CARLA actor by position.
+
+        CARLA actor IDs aren't stable across versions/sessions, so we match by world
+        coordinates instead of relying on a hard-coded id field in map_info.json.
+        """
         traffic_lights = {}
-        for actor in world_traffic_lights:
-            if actor.id in self.light_mapping.values():
-                traffic_lights[actor.id] = actor
-        for key, carla_item in traffic_lights.items():
-            logging.debug(f'[Intersection Manager] Traffic Light ID {key} is getted.')
+        for autoware_tl, (x, y) in self.light_positions.items():
+            best = min(
+                world_traffic_lights,
+                key=lambda a, x=x, y=y: (a.get_location().x - x) ** 2 + (a.get_location().y - y) ** 2,
+            )
+            loc = best.get_location()
+            dist = ((loc.x - x) ** 2 + (loc.y - y) ** 2) ** 0.5
+            if dist > TRAFFIC_LIGHT_MATCH_THRESHOLD_M:
+                logging.warning(
+                    f'[Intersection Manager][{self.section_id}] autoware_tl {autoware_tl}: '
+                    f'nearest CARLA light id={best.id} is {dist:.2f}m away '
+                    f'(threshold {TRAFFIC_LIGHT_MATCH_THRESHOLD_M}m) — check map_info.json'
+                )
+            else:
+                logging.debug(f'[Intersection Manager][{self.section_id}] autoware_tl {autoware_tl} -> CARLA id={best.id} (dist={dist:.2f}m)')
+            traffic_lights[autoware_tl] = best
         return traffic_lights
 
     def _set_traffic_light_state(self, green_id):
         """Set traffic light states: one green, others red."""
-        for id, traffic_light in self.traffic_lights.items():
-            if id == green_id:
+        for autoware_tl, traffic_light in self.traffic_lights.items():
+            if autoware_tl == green_id:
                 traffic_light.set_state(carla.TrafficLightState.Green)
-                logging.debug(f'[Intersection Manager][{self.section_id}] Traffic light {id} set to GREEN')
+                logging.debug(f'[Intersection Manager][{self.section_id}] Traffic light {autoware_tl} set to GREEN')
             else:
                 traffic_light.set_state(carla.TrafficLightState.Red)
-                logging.debug(f'[Intersection Manager][{self.section_id}] Traffic light {id} set to RED')
+                logging.debug(f'[Intersection Manager][{self.section_id}] Traffic light {autoware_tl} set to RED')
 
     @trace
     async def auto_changing_state(self):
@@ -83,19 +102,17 @@ class Intersection:
 
     @trace
     def get_state(self, autoware_tl):
-        carla_tl = self.light_mapping[autoware_tl]
-        return self.traffic_lights[carla_tl].get_state()
+        return self.traffic_lights[autoware_tl].get_state()
 
     @trace
     async def handle_priority(self, autoware_tl, duration):
         self.priority_event.set()
         logging.info(f'[Intersection Manager][{self.section_id}] Priority active, priority event is set.')
-        carla_tl = self.light_mapping[autoware_tl]
-        for id, traffic_light in self.traffic_lights.items():
-            if id != carla_tl:
+        for tl_id, traffic_light in self.traffic_lights.items():
+            if tl_id != autoware_tl:
                 traffic_light.set_state(carla.TrafficLightState.Red)
         await asyncio.sleep(1)
-        self.traffic_lights[carla_tl].set_state(carla.TrafficLightState.Green)
+        self.traffic_lights[autoware_tl].set_state(carla.TrafficLightState.Green)
         if duration != 0:
             await asyncio.sleep(duration)
             self.priority_event.clear()
@@ -107,12 +124,23 @@ class Intersection:
 
 
 def load_map_info(file_path):
+    """Load {section_id: {autoware_tl: (carla_x, carla_y)}} from map_info.json.
+
+    map_info.json stores positions in Autoware coordinates (Autoware_y = -CARLA_y),
+    so we negate y here to keep the rest of the code in CARLA's frame.
+    """
     with open(file_path, 'r') as f:
         map_info = json.load(f)
-    autoware_to_carla_tl = {}
+    autoware_to_position = {}
     for section_id, lanes in map_info['intersections'].items():
-        autoware_to_carla_tl[section_id] = {int(lane['autoware_traffic_light']): int(lane['carla_traffic_light']) for lane in lanes}
-    return autoware_to_carla_tl
+        autoware_to_position[section_id] = {
+            int(lane['autoware_traffic_light']): (
+                float(lane['traffic_light_position']['x']),
+                -float(lane['traffic_light_position']['y']),
+            )
+            for lane in lanes
+        }
+    return autoware_to_position
 
 
 @trace
@@ -246,7 +274,7 @@ if __name__ == '__main__':
     fix_red_light_to_all()
 
     intersections = {}
-    for section_id, light_mapping in map_info.items():
-        intersections[section_id] = Intersection(section_id, light_mapping)
+    for section_id, light_positions in map_info.items():
+        intersections[section_id] = Intersection(section_id, light_positions)
 
     asyncio.run(main())
