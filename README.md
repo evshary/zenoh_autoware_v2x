@@ -70,26 +70,38 @@ colcon build --symlink-install
 ./CarlaUE4.sh -quality-level=Epic -world-port=2000 -RenderOffScreen -prefernvidia
 ```
 
+- Pick one mode and use the matching script in every step below:
+  - `rmw_zenoh`: use `rmw_zenoh_cpp` directly as the RMW.
+  - `ros2dds`: use `rmw_cyclonedds_cpp` with `zenoh-bridge-ros2dds`.
+
 - In bridge container
 
 ```shell
 # Run zenoh_carla_bridge, Python Agent and V2X module
 cd autoware_carla_launch
 source env.sh
+# Option A: rmw_zenoh
+./script/bridge_rmw_zenoh/run-bridge-v2x-with-rmw_zenoh.sh
+# Option B: ros2dds
 ./script/bridge_ros2dds/run-bridge-v2x.sh
 ```
 
 - In Autoware container
 
 ```shell
-# Run zenoh-bridge-ros2dds and Autoware
+# Run Autoware
 cd autoware_carla_launch
 source env.sh
+# Option A: rmw_zenoh
+./script/autoware_rmw_zenoh/run-autoware-with-rmw_zenoh.sh
+# Option B: ros2dds
 ./script/autoware_ros2dds/run-autoware.sh
 
 # Open another window in the Autoware container to execute the commands below.
-source external/zenoh_autoware_v2x/install/setup.bash
-ros2 run v2x_light v2x_light -- -v <vehicle_ID>
+# Option A: rmw_zenoh
+./script/autoware_rmw_zenoh/run-v2x-light-with-rmw_zenoh.sh <vehicle_ID>
+# Option B: ros2dds
+./script/autoware_ros2dds/run-v2x-light.sh <vehicle_ID>
 ```
 
 **Note:** <vehicle_ID> must match the CARLA agent's role name. (default is "v1")
