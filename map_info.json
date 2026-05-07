@@ -3,7 +3,7 @@
         "A": [
             {
                 "autoware_lane": 25355,
-                "autoware_traffic_light": 29855,
+                "autoware_traffic_light": 30227,
                 "traffic_light_position": {
                     "x": 85.729996,
                     "y": -45.779999
@@ -11,7 +11,7 @@
             },
             {
                 "autoware_lane": 21186,
-                "autoware_traffic_light": 29777,
+                "autoware_traffic_light": 30216,
                 "traffic_light_position": {
                     "x": 102.720001,
                     "y": -52.850018
@@ -19,7 +19,7 @@
             },
             {
                 "autoware_lane": 25648,
-                "autoware_traffic_light": 29861,
+                "autoware_traffic_light": 30205,
                 "traffic_light_position": {
                     "x": 94.989975,
                     "y": -70.409996
@@ -29,7 +29,7 @@
         "B": [
             {
                 "autoware_lane": 21093,
-                "autoware_traffic_light": 29783,
+                "autoware_traffic_light": 30139,
                 "traffic_light_position": {
                     "x": 144.240036,
                     "y": -62.289997
@@ -37,7 +37,7 @@
             },
             {
                 "autoware_lane": 26359,
-                "autoware_traffic_light": 29903,
+                "autoware_traffic_light": 30150,
                 "traffic_light_position": {
                     "x": 151.309952,
                     "y": -45.300076
@@ -45,7 +45,7 @@
             },
             {
                 "autoware_lane": 21828,
-                "autoware_traffic_light": 29789,
+                "autoware_traffic_light": 30161,
                 "traffic_light_position": {
                     "x": 168.869995,
                     "y": -53.030037
@@ -55,7 +55,7 @@
         "C": [
             {
                 "autoware_lane": 24578,
-                "autoware_traffic_light": 29825,
+                "autoware_traffic_light": 29985,
                 "traffic_light_position": {
                     "x": 341.250031,
                     "y": -69.509956
@@ -63,7 +63,7 @@
             },
             {
                 "autoware_lane": 21507,
-                "autoware_traffic_light": 29795,
+                "autoware_traffic_light": 29974,
                 "traffic_light_position": {
                     "x": 321.760101,
                     "y": -62.440075
@@ -71,7 +71,7 @@
             },
             {
                 "autoware_lane": 24283,
-                "autoware_traffic_light": 29819,
+                "autoware_traffic_light": 29996,
                 "traffic_light_position": {
                     "x": 331.990021,
                     "y": -44.880039
@@ -81,7 +81,7 @@
         "D": [
             {
                 "autoware_lane": 25539,
-                "autoware_traffic_light": 29867,
+                "autoware_traffic_light": 30347,
                 "traffic_light_position": {
                     "x": 85.729988,
                     "y": -119.75
@@ -89,7 +89,7 @@
             },
             {
                 "autoware_lane": 18400,
-                "autoware_traffic_light": 29741,
+                "autoware_traffic_light": 30249,
                 "traffic_light_position": {
                     "x": 102.719986,
                     "y": -126.820015
@@ -97,7 +97,7 @@
             },
             {
                 "autoware_lane": 25838,
-                "autoware_traffic_light": 29873,
+                "autoware_traffic_light": 30260,
                 "traffic_light_position": {
                     "x": 94.989967,
                     "y": -144.38002
@@ -107,7 +107,7 @@
         "E": [
             {
                 "autoware_lane": 24756,
-                "autoware_traffic_light": 29927,
+                "autoware_traffic_light": 30029,
                 "traffic_light_position": {
                     "x": 341.250031,
                     "y": -143.559952
@@ -115,7 +115,7 @@
             },
             {
                 "autoware_lane": 17947,
-                "autoware_traffic_light": 29747,
+                "autoware_traffic_light": 30018,
                 "traffic_light_position": {
                     "x": 321.680115,
                     "y": -136.132156
@@ -123,7 +123,7 @@
             },
             {
                 "autoware_lane": 24469,
-                "autoware_traffic_light": 29831,
+                "autoware_traffic_light": 30007,
                 "traffic_light_position": {
                     "x": 331.990021,
                     "y": -118.930038
@@ -133,7 +133,7 @@
         "F": [
             {
                 "autoware_lane": 25743,
-                "autoware_traffic_light": 29879,
+                "autoware_traffic_light": 30282,
                 "traffic_light_position": {
                     "x": 85.729988,
                     "y": -185.289993
@@ -141,7 +141,7 @@
             },
             {
                 "autoware_lane": 22808,
-                "autoware_traffic_light": 29801,
+                "autoware_traffic_light": 30271,
                 "traffic_light_position": {
                     "x": 102.719986,
                     "y": -192.550003
@@ -149,7 +149,7 @@
             },
             {
                 "autoware_lane": 26284,
-                "autoware_traffic_light": 29885,
+                "autoware_traffic_light": 30293,
                 "traffic_light_position": {
                     "x": 94.989967,
                     "y": -209.919998
@@ -159,7 +159,7 @@
         "G": [
             {
                 "autoware_lane": 25202,
-                "autoware_traffic_light": 29921,
+                "autoware_traffic_light": 30062,
                 "traffic_light_position": {
                     "x": 341.250031,
                     "y": -209.09996
@@ -167,7 +167,7 @@
             },
             {
                 "autoware_lane": 22355,
-                "autoware_traffic_light": 29807,
+                "autoware_traffic_light": 30051,
                 "traffic_light_position": {
                     "x": 323.410095,
                     "y": -202.030075
@@ -175,7 +175,7 @@
             },
             {
                 "autoware_lane": 24667,
-                "autoware_traffic_light": 29837,
+                "autoware_traffic_light": 30040,
                 "traffic_light_position": {
                     "x": 331.990021,
                     "y": -184.470032
