@@ -50,6 +50,13 @@ float32 confidence
 
 parser = ArgumentParser()
 parser.add_argument('--vehicle', '-v', type=str, default='v1', help='Vehicle ID')
+parser.add_argument(
+    '--map-info',
+    dest='map_info',
+    type=str,
+    default='external/zenoh_autoware_v2x/map_info.json',
+    help='Path to map_info.json (resolved relative to current working directory)',
+)
 
 args = parser.parse_args()
 
@@ -85,54 +92,24 @@ confidence = 1.0
 
 color_dict = {'Red': 1, 'Yellow': 2, 'Green': 3, 'White': 4}
 
-lane_id = [
-    25355,
-    21186,
-    25648,  # A
-    21093,
-    26359,
-    21828,  # B
-    21507,
-    24283,
-    24578,  # C
-    25539,
-    18400,
-    25838,  # D
-    24756,
-    17947,
-    24469,  # E
-    25743,
-    22808,
-    26284,  # F
-    25202,
-    22355,
-    24667,
-]
+
+def _load_map_info(path):
+    """Build (lane_id, light_id, intersection_id) from map_info.json.
+
+    lane_id[i] corresponds to light_id[i]; intersection_id maps tl_id -> section letter.
+    """
+    with open(path) as f:
+        data = json.load(f)
+    lanes, lights, sections = [], [], {}
+    for section_id, entries in data['intersections'].items():
+        for entry in entries:
+            lanes.append(int(entry['autoware_lane']))
+            lights.append(int(entry['autoware_traffic_light']))
+            sections[int(entry['autoware_traffic_light'])] = section_id
+    return lanes, lights, sections
 
 
-light_id = [
-    29855,
-    29777,
-    29861,  # A
-    29783,
-    29903,
-    29789,  # B
-    29795,
-    29819,
-    29825,  # C
-    29867,
-    29741,
-    29873,  # D
-    29927,
-    29747,
-    29831,  # E
-    29879,
-    29801,
-    29885,  # F
-    29921,
-    29807,
-    29837,
-]
+lane_id, light_id, intersection_id = _load_map_info(args.map_info)
 
 # TODO: Please avoid using global variables here, as they may cause conflicts in multi-vehicle scenarios.
 # Init. global variables about Pose
@@ -243,31 +220,6 @@ class SignalPub(Node):
         # TODO: Use the query_light_status function here to set Carla's traffic lights.
 
     def query_light_status(self, tl_id):
-        # Match intersection ID and traffic light ID
-        intersection_id = {
-            29855: 'A',
-            29777: 'A',
-            29861: 'A',  # A
-            29783: 'B',
-            29903: 'B',
-            29789: 'B',  # B
-            29795: 'C',
-            29819: 'C',
-            29825: 'C',  # C
-            29867: 'D',
-            29741: 'D',
-            29873: 'D',  # D
-            29927: 'E',
-            29747: 'E',
-            29831: 'E',  # E
-            29879: 'F',
-            29801: 'F',
-            29885: 'F',  # F
-            29921: 'G',
-            29807: 'G',
-            29837: 'G',  # G
-        }
-
         selector = f'intersection/{intersection_id[tl_id]}/traffic_light/' + str(tl_id) + '/state'
 
         target = {
