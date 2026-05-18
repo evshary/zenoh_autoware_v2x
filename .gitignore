@@ -5,7 +5,7 @@ log
 # Python files
 *.pyc
 __pycache__
-# Ignore poetry environment
+# Ignore uv environment
 .venv
 # Ignore pyenv version
 .python-version

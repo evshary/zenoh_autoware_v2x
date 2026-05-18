@@ -92,6 +92,5 @@ The `map_info.json` file is loaded during the initialization of the **Traffic Ma
 You can use pre-commit and Ruff to have correct Python format
 
 ```shell
-python3 -m pip install pre-commit ruff
-pre-commit install --install-hooks
+uv run pre-commit install --install-hooks
 ```

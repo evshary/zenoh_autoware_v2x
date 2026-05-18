@@ -1,20 +1,22 @@
-[tool.poetry]
+[project]
 name = "v2x-agent"
 version = "0.1.0"
 description = ""
-authors = ["RogerJung <engineer54rj@gmail.com>"]
+authors = [{ name = "RogerJung", email = "engineer54rj@gmail.com" }]
 readme = "README.md"
+requires-python = ">=3.12,<4"
+dependencies = [
+    "pygame>=2.1.2,<3",
+    "carla==0.9.16",
+    "numpy>=1.26,<2",
+    "eclipse-zenoh==1.8.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-pygame = "^2.1.2"
-carla = "0.9.16"
-numpy = "^1.26"
-eclipse-zenoh = "1.8.0"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[dependency-groups]
+dev = [
+    "pre-commit>=4.0.0",
+    "ruff>=0.8.0",
+]
 
 # Ruff
 [tool.ruff]
