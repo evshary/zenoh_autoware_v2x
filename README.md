@@ -85,7 +85,7 @@ The `map_info.json` file defines the mapping between intersections and traffic l
     The CARLA coordinate y-axis value should be negated to match Autoware’s coordinate system.
   - Alternatively, positions can also be extracted from the `lanelet2_map.osm` file.
 
-The `map_info.json` file is loaded during the initialization of the **Traffic Manager** and **Intersection Manager**.
+The `map_info.json` file is loaded during the initialization of the **Traffic Manager**, **Intersection Manager**, and **V2X Light Client**.
 
 ## For Developers
 
