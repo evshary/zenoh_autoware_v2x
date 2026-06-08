@@ -94,3 +94,10 @@ You can use pre-commit and Ruff to have correct Python format
 ```shell
 uv run pre-commit install --install-hooks
 ```
+
+## Maintainers
+
+| Avatar | GitHub ID | Name |
+| --- | --- | --- |
+| <a href="https://github.com/evshary"><img src="https://github.com/evshary.png" width="48" alt="evshary" /></a> | [@evshary](https://github.com/evshary) | ChenYing Kuo |
+| <a href="https://github.com/hsule"><img src="https://github.com/hsule.png" width="48" alt="hsule" /></a> | [@hsule](https://github.com/hsule) | Leann Hsu |
