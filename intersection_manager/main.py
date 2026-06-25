@@ -167,13 +167,17 @@ async def normal_operation():
 
 
 @trace
-async def start_queryable(event_queue):
+async def start_queryable(event_queue, connect):
     # initiate logging
     zenoh.init_log_from_env_or('error')
 
     logging.info('[Intersection Manager] Opening session...')
 
-    with zenoh.open(zenoh.Config()) as session:
+    # Connect to the endpoints given by -e (e.g. the CARLA router); without -e, use the default config.
+    config = zenoh.Config()
+    if connect:
+        config.insert_json5('connect/endpoints', json.dumps(connect))
+    with zenoh.open(config) as session:
         queryable_key = 'intersection/**/traffic_light/**'
 
         @trace
@@ -211,9 +215,9 @@ async def start_queryable(event_queue):
             await asyncio.sleep(0)
 
 
-async def main():
+async def main(connect):
     event_queue = queue.Queue()
-    await asyncio.gather(*[normal_operation(), start_queryable(event_queue), event_handler(event_queue)])
+    await asyncio.gather(*[normal_operation(), start_queryable(event_queue, connect), event_handler(event_queue)])
 
 
 def fix_red_light_to_all():
@@ -251,7 +255,15 @@ if __name__ == '__main__':
         default=default_config_path,
         help='Path to the map information file.',
     )
-
+    parser.add_argument(
+        '--connect',
+        '-e',
+        dest='connect',
+        metavar='ENDPOINT',
+        action='append',
+        type=str,
+        help='Endpoint to connect to.',
+    )
     args = parser.parse_args()
 
     map_info = load_map_info(args.map_info)
@@ -277,4 +289,4 @@ if __name__ == '__main__':
     for section_id, light_positions in map_info.items():
         intersections[section_id] = Intersection(section_id, light_positions)
 
-    asyncio.run(main())
+    asyncio.run(main(args.connect))

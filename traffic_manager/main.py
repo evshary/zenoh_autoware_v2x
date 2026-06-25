@@ -228,11 +228,15 @@ async def decision_making(session, tx):
     await asyncio.gather(*tasks)
 
 
-async def start_sub_and_decision_making():
+async def start_sub_and_decision_making(connect):
     # initiate logging
     zenoh.init_log_from_env_or('error')
     logging.info('[Traffic Manager] Opening session...')
-    with zenoh.open(zenoh.Config()) as session:
+    # Connect to the endpoints given by -e (e.g. the CARLA router); without -e, use the default config.
+    config = zenoh.Config()
+    if connect:
+        config.insert_json5('connect/endpoints', json.dumps(connect))
+    with zenoh.open(config) as session:
         tx = queue.Queue()
         await asyncio.gather(*[subscriber(session, tx), decision_making(session, tx)])
 
@@ -249,7 +253,15 @@ if __name__ == '__main__':
         default=default_config_path,
         help='Path to the map information file.',
     )
-
+    parser.add_argument(
+        '--connect',
+        '-e',
+        dest='connect',
+        metavar='ENDPOINT',
+        action='append',
+        type=str,
+        help='Endpoint to connect to.',
+    )
     args = parser.parse_args()
 
     lane_to_light, lane_to_intersection = load_map_info(args.map_info)
@@ -258,4 +270,4 @@ if __name__ == '__main__':
     for section_id, lane_info in lane_to_light.items():
         intersections[section_id] = Intersection(section_id, lane_info)
 
-    asyncio.run(start_sub_and_decision_making())
+    asyncio.run(start_sub_and_decision_making(args.connect))
